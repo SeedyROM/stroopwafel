@@ -1,5 +1,5 @@
 use crate::caveat::Caveat;
-use crate::crypto::{bind_caveat, hmac_sha3, SIGNATURE_SIZE};
+use crate::crypto::{SIGNATURE_SIZE, bind_caveat, hmac_sha3};
 use crate::verifier::Verifier;
 use crate::{Result, StroopwafelError};
 use serde::{Deserialize, Serialize};
@@ -317,7 +317,9 @@ impl Stroopwafel {
         // The discharge signature should be: HMAC(original_discharge_sig, primary.signature)
         // We need to verify the discharge was properly bound
         let verification_key = caveat.verification_key_id.as_ref().ok_or_else(|| {
-            StroopwafelError::InvalidFormat("Third-party caveat missing verification key".to_string())
+            StroopwafelError::InvalidFormat(
+                "Third-party caveat missing verification key".to_string(),
+            )
         })?;
 
         // Verify the discharge macaroon itself
@@ -339,10 +341,8 @@ impl Stroopwafel {
         for caveat in &self.caveats {
             if caveat.is_first_party() {
                 computed_signature = bind_caveat(&computed_signature, &caveat.caveat_id);
-            } else {
-                if let Some(ref vk_id) = caveat.verification_key_id {
-                    computed_signature = bind_caveat(&computed_signature, vk_id);
-                }
+            } else if let Some(ref vk_id) = caveat.verification_key_id {
+                computed_signature = bind_caveat(&computed_signature, vk_id);
             }
         }
 
@@ -402,7 +402,8 @@ mod tests {
     #[test]
     fn test_add_first_party_caveat() {
         let root_key = b"secret";
-        let mut stroopwafel = Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
+        let mut stroopwafel =
+            Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
 
         let original_signature = stroopwafel.signature;
 
@@ -419,7 +420,8 @@ mod tests {
     #[test]
     fn test_add_multiple_first_party_caveats() {
         let root_key = b"secret";
-        let mut stroopwafel = Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
+        let mut stroopwafel =
+            Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
 
         stroopwafel.add_first_party_caveat(b"account = alice");
         let sig_after_first = stroopwafel.signature;
@@ -452,7 +454,8 @@ mod tests {
     #[test]
     fn test_add_third_party_caveat() {
         let root_key = b"secret";
-        let mut stroopwafel = Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
+        let mut stroopwafel =
+            Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
 
         stroopwafel.add_third_party_caveat(
             b"account = alice",
@@ -519,7 +522,10 @@ mod tests {
         let result = stroopwafel.verify(wrong_key, &verifier, &[]);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), StroopwafelError::InvalidSignature));
+        assert!(matches!(
+            result.unwrap_err(),
+            StroopwafelError::InvalidSignature
+        ));
     }
 
     #[test]
@@ -535,7 +541,10 @@ mod tests {
         let result = stroopwafel.verify(root_key, &verifier, &[]);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), StroopwafelError::InvalidSignature));
+        assert!(matches!(
+            result.unwrap_err(),
+            StroopwafelError::InvalidSignature
+        ));
     }
 
     #[test]
@@ -628,11 +637,14 @@ mod tests {
         let discharge = Stroopwafel::create_discharge(
             verification_key,
             caveat_id,
-            Some("https://auth.example.com")
+            Some("https://auth.example.com"),
         );
 
         assert_eq!(discharge.identifier, caveat_id);
-        assert_eq!(discharge.location, Some("https://auth.example.com".to_string()));
+        assert_eq!(
+            discharge.location,
+            Some("https://auth.example.com".to_string())
+        );
         assert_eq!(discharge.caveats.len(), 0);
     }
 
@@ -642,11 +654,8 @@ mod tests {
         let primary = Stroopwafel::new(root_key, b"primary", None::<String>);
 
         let verification_key = b"verification_secret";
-        let discharge = Stroopwafel::create_discharge(
-            verification_key,
-            b"caveat_id",
-            None::<String>
-        );
+        let discharge =
+            Stroopwafel::create_discharge(verification_key, b"caveat_id", None::<String>);
 
         let original_discharge_sig = discharge.signature;
         let bound_discharge = primary.bind_discharge(&discharge);
@@ -667,14 +676,11 @@ mod tests {
         primary.add_third_party_caveat(
             b"auth_required",
             b"verification_key",
-            "https://auth.example.com"
+            "https://auth.example.com",
         );
 
-        let discharge = Stroopwafel::create_discharge(
-            b"verification_key",
-            b"auth_required",
-            None::<String>
-        );
+        let discharge =
+            Stroopwafel::create_discharge(b"verification_key", b"auth_required", None::<String>);
 
         let stroopwafels = primary.prepare_for_request(vec![discharge]);
 
@@ -690,17 +696,13 @@ mod tests {
 
         // Create primary stroopwafel with third-party caveat
         let mut primary = Stroopwafel::new(root_key, b"primary_id", None::<String>);
-        primary.add_third_party_caveat(
-            b"auth_check",
-            verification_key,
-            "https://auth.example.com"
-        );
+        primary.add_third_party_caveat(b"auth_check", verification_key, "https://auth.example.com");
 
         // Create discharge macaroon
         let discharge = Stroopwafel::create_discharge(
             verification_key,
             b"auth_check",
-            Some("https://auth.example.com")
+            Some("https://auth.example.com"),
         );
 
         // Bind the discharge
@@ -708,7 +710,11 @@ mod tests {
 
         // Verify should succeed with the discharge
         let verifier = AcceptAllVerifier;
-        assert!(primary.verify(root_key, &verifier, &[bound_discharge]).is_ok());
+        assert!(
+            primary
+                .verify(root_key, &verifier, &[bound_discharge])
+                .is_ok()
+        );
     }
 
     #[test]
@@ -718,11 +724,7 @@ mod tests {
 
         // Create primary stroopwafel with third-party caveat
         let mut primary = Stroopwafel::new(root_key, b"primary_id", None::<String>);
-        primary.add_third_party_caveat(
-            b"auth_check",
-            verification_key,
-            "https://auth.example.com"
-        );
+        primary.add_third_party_caveat(b"auth_check", verification_key, "https://auth.example.com");
 
         // Verify should fail without discharge
         let verifier = AcceptAllVerifier;
@@ -742,18 +744,11 @@ mod tests {
 
         // Create primary stroopwafel with third-party caveat
         let mut primary = Stroopwafel::new(root_key, b"primary_id", None::<String>);
-        primary.add_third_party_caveat(
-            b"auth_check",
-            verification_key,
-            "https://auth.example.com"
-        );
+        primary.add_third_party_caveat(b"auth_check", verification_key, "https://auth.example.com");
 
         // Create discharge for DIFFERENT caveat
-        let wrong_discharge = Stroopwafel::create_discharge(
-            verification_key,
-            b"wrong_caveat_id",
-            None::<String>
-        );
+        let wrong_discharge =
+            Stroopwafel::create_discharge(verification_key, b"wrong_caveat_id", None::<String>);
 
         let bound_discharge = primary.bind_discharge(&wrong_discharge);
 
@@ -772,18 +767,11 @@ mod tests {
         // Create primary stroopwafel with third-party caveat
         let mut primary = Stroopwafel::new(root_key, b"primary_id", None::<String>);
         primary.add_first_party_caveat(b"account = alice");
-        primary.add_third_party_caveat(
-            b"auth_check",
-            verification_key,
-            "https://auth.example.com"
-        );
+        primary.add_third_party_caveat(b"auth_check", verification_key, "https://auth.example.com");
 
         // Create discharge macaroon with its own caveats
-        let mut discharge = Stroopwafel::create_discharge(
-            verification_key,
-            b"auth_check",
-            None::<String>
-        );
+        let mut discharge =
+            Stroopwafel::create_discharge(verification_key, b"auth_check", None::<String>);
         discharge.add_first_party_caveat(b"time < 2025-12-31");
 
         // Bind the discharge
@@ -795,7 +783,11 @@ mod tests {
             .with("time", "2025-01-01");
 
         // Should succeed
-        assert!(primary.verify(root_key, &verifier, &[bound_discharge]).is_ok());
+        assert!(
+            primary
+                .verify(root_key, &verifier, &[bound_discharge])
+                .is_ok()
+        );
     }
 
     #[test]
@@ -805,18 +797,11 @@ mod tests {
 
         // Create primary stroopwafel with third-party caveat
         let mut primary = Stroopwafel::new(root_key, b"primary_id", None::<String>);
-        primary.add_third_party_caveat(
-            b"auth_check",
-            verification_key,
-            "https://auth.example.com"
-        );
+        primary.add_third_party_caveat(b"auth_check", verification_key, "https://auth.example.com");
 
         // Create discharge macaroon with a caveat
-        let mut discharge = Stroopwafel::create_discharge(
-            verification_key,
-            b"auth_check",
-            None::<String>
-        );
+        let mut discharge =
+            Stroopwafel::create_discharge(verification_key, b"auth_check", None::<String>);
         discharge.add_first_party_caveat(b"level >= 10");
 
         // Bind the discharge
@@ -855,6 +840,10 @@ mod tests {
 
         // Should succeed with both discharges
         let verifier = AcceptAllVerifier;
-        assert!(primary.verify(root_key, &verifier, &[bound1, bound2]).is_ok());
+        assert!(
+            primary
+                .verify(root_key, &verifier, &[bound1, bound2])
+                .is_ok()
+        );
     }
 }

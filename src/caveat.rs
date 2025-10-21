@@ -75,6 +75,9 @@ mod tests {
         assert!(!caveat.is_first_party());
         assert_eq!(caveat.caveat_id, b"account = alice");
         assert_eq!(caveat.verification_key_id, Some(b"encrypted_key".to_vec()));
-        assert_eq!(caveat.location, Some("https://auth.example.com".to_string()));
+        assert_eq!(
+            caveat.location,
+            Some("https://auth.example.com".to_string())
+        );
     }
 }

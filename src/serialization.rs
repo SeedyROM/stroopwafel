@@ -1,5 +1,5 @@
 use crate::{Result, Stroopwafel, StroopwafelError};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
 impl Stroopwafel {
     /// Serializes this stroopwafel to JSON
@@ -71,8 +71,7 @@ impl Stroopwafel {
     /// assert!(!msgpack.is_empty());
     /// ```
     pub fn to_msgpack(&self) -> Result<Vec<u8>> {
-        rmp_serde::to_vec(self)
-            .map_err(|e| StroopwafelError::DeserializationError(e.to_string()))
+        rmp_serde::to_vec(self).map_err(|e| StroopwafelError::DeserializationError(e.to_string()))
     }
 
     /// Deserializes a stroopwafel from MessagePack binary format
@@ -188,7 +187,8 @@ mod tests {
     #[test]
     fn test_json_roundtrip_with_caveats() {
         let root_key = b"secret";
-        let mut original = Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
+        let mut original =
+            Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
         original.add_first_party_caveat(b"account = alice");
         original.add_first_party_caveat(b"action = read");
 
@@ -222,7 +222,8 @@ mod tests {
     #[test]
     fn test_msgpack_roundtrip_with_first_party_caveats() {
         let root_key = b"secret";
-        let mut original = Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
+        let mut original =
+            Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
         original.add_first_party_caveat(b"account = alice");
         original.add_first_party_caveat(b"action = read");
 
@@ -235,7 +236,8 @@ mod tests {
     #[test]
     fn test_msgpack_roundtrip_with_third_party_caveats() {
         let root_key = b"secret";
-        let mut original = Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
+        let mut original =
+            Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
         original.add_first_party_caveat(b"account = alice");
         original.add_third_party_caveat(
             b"external_check",
@@ -252,7 +254,8 @@ mod tests {
     #[test]
     fn test_msgpack_is_compact() {
         let root_key = b"secret";
-        let mut stroopwafel = Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
+        let mut stroopwafel =
+            Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
         stroopwafel.add_first_party_caveat(b"account = alice");
 
         let msgpack = stroopwafel.to_msgpack().unwrap();
@@ -265,7 +268,8 @@ mod tests {
     #[test]
     fn test_base64_roundtrip() {
         let root_key = b"secret";
-        let mut original = Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
+        let mut original =
+            Stroopwafel::new(root_key, b"my-identifier", Some("http://example.com/"));
         original.add_first_party_caveat(b"account = alice");
 
         let b64 = original.to_base64().unwrap();

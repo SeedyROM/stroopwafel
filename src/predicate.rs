@@ -20,7 +20,7 @@ pub enum Operator {
 
 impl Operator {
     /// Parse an operator from a string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.trim() {
             "=" => Some(Operator::Equal),
             "!=" => Some(Operator::NotEqual),
@@ -87,13 +87,12 @@ impl Predicate {
 
                 if key.is_empty() || value.is_empty() {
                     return Err(StroopwafelError::InvalidFormat(format!(
-                        "Invalid predicate format: '{}'",
-                        s
+                        "Invalid predicate format: '{s}'"
                     )));
                 }
 
-                let operator = Operator::from_str(op_str).ok_or_else(|| {
-                    StroopwafelError::InvalidFormat(format!("Unknown operator: '{}'", op_str))
+                let operator = Operator::parse(op_str).ok_or_else(|| {
+                    StroopwafelError::InvalidFormat(format!("Unknown operator: '{op_str}'"))
                 })?;
 
                 return Ok(Predicate {
@@ -105,8 +104,7 @@ impl Predicate {
         }
 
         Err(StroopwafelError::InvalidFormat(format!(
-            "No operator found in predicate: '{}'",
-            s
+            "No operator found in predicate: '{s}'"
         )))
     }
 

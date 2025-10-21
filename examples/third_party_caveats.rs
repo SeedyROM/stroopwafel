@@ -37,7 +37,7 @@ fn main() {
 
     match primary.verify(root_key, &verifier, &[]) {
         Ok(_) => println!("   ✗ Unexpectedly succeeded!"),
-        Err(e) => println!("   ✓ Correctly failed: {}", e),
+        Err(e) => println!("   ✓ Correctly failed: {e}"),
     }
 
     // Step 3: Client contacts auth service and gets a discharge macaroon
@@ -70,7 +70,7 @@ fn main() {
 
     match primary.verify(root_key, &full_verifier, &[bound_discharge.clone()]) {
         Ok(_) => println!("   ✓ Verification successful! Access granted."),
-        Err(e) => println!("   ✗ Verification failed: {}", e),
+        Err(e) => println!("   ✗ Verification failed: {e}"),
     }
 
     // Step 6: Try with insufficient auth level (should fail)
@@ -81,7 +81,7 @@ fn main() {
 
     match primary.verify(root_key, &weak_verifier, &[bound_discharge.clone()]) {
         Ok(_) => println!("   ✗ Unexpectedly succeeded!"),
-        Err(e) => println!("   ✓ Correctly failed: {}", e),
+        Err(e) => println!("   ✓ Correctly failed: {e}"),
     }
 
     // Step 7: Multiple third-party caveats
@@ -124,7 +124,7 @@ fn main() {
     let permissive_verifier = AcceptAllVerifier;
     match all_stroopwafels[0].verify(root_key, &permissive_verifier, &all_stroopwafels[1..]) {
         Ok(_) => println!("   ✓ All third-party caveats satisfied!"),
-        Err(e) => println!("   ✗ Verification failed: {}", e),
+        Err(e) => println!("   ✗ Verification failed: {e}"),
     }
 
     println!("\n=== Example Complete ===");

@@ -1,5 +1,5 @@
-use stroopwafel::verifier::ContextVerifier;
 use stroopwafel::Stroopwafel;
+use stroopwafel::verifier::ContextVerifier;
 
 fn main() {
     println!("=== Stroopwafel Basic Usage Example ===\n");
@@ -12,8 +12,10 @@ fn main() {
         Some("https://api.example.com"),
     );
 
-    println!("1. Created stroopwafel with identifier: {:?}",
-        String::from_utf8_lossy(&stroopwafel.identifier));
+    println!(
+        "1. Created stroopwafel with identifier: {:?}",
+        String::from_utf8_lossy(&stroopwafel.identifier)
+    );
 
     // Step 2: Add first-party caveats (restrictions)
     stroopwafel.add_first_party_caveat(b"account = alice");
@@ -22,7 +24,11 @@ fn main() {
 
     println!("\n2. Added caveats:");
     for (i, caveat) in stroopwafel.caveats.iter().enumerate() {
-        println!("   {}. {}", i + 1, String::from_utf8_lossy(&caveat.caveat_id));
+        println!(
+            "   {}. {}",
+            i + 1,
+            String::from_utf8_lossy(&caveat.caveat_id)
+        );
     }
 
     // Step 3: Serialize the stroopwafel for transmission
@@ -31,7 +37,7 @@ fn main() {
 
     println!("\n3. Serialized formats:");
     println!("   JSON (truncated): {}...", &json[..80.min(json.len())]);
-    println!("   Base64: {}", base64);
+    println!("   Base64: {base64}");
 
     // Step 4: Deserialize and verify
     let received = Stroopwafel::from_base64(&base64).unwrap();
@@ -46,7 +52,7 @@ fn main() {
 
     match received.verify(root_key, &verifier, &[]) {
         Ok(_) => println!("   ✓ Verification successful!"),
-        Err(e) => println!("   ✗ Verification failed: {}", e),
+        Err(e) => println!("   ✗ Verification failed: {e}"),
     }
 
     // Step 5: Try with wrong context
@@ -58,7 +64,7 @@ fn main() {
 
     match received.verify(root_key, &wrong_verifier, &[]) {
         Ok(_) => println!("   ✗ Unexpectedly succeeded!"),
-        Err(e) => println!("   ✓ Correctly failed: {}", e),
+        Err(e) => println!("   ✓ Correctly failed: {e}"),
     }
 
     // Step 6: Numeric comparisons
@@ -68,12 +74,12 @@ fn main() {
     time_limited.add_first_party_caveat(b"level >= 5");
 
     let numeric_verifier = ContextVerifier::empty()
-        .with("count", "50")   // 50 < 100 ✓
-        .with("level", "10");  // 10 >= 5 ✓
+        .with("count", "50") // 50 < 100 ✓
+        .with("level", "10"); // 10 >= 5 ✓
 
     match time_limited.verify(root_key, &numeric_verifier, &[]) {
         Ok(_) => println!("   ✓ Numeric verification successful!"),
-        Err(e) => println!("   ✗ Numeric verification failed: {}", e),
+        Err(e) => println!("   ✗ Numeric verification failed: {e}"),
     }
 
     println!("\n=== Example Complete ===");

@@ -102,7 +102,7 @@ impl CompositeVerifier {
     }
 
     /// Adds a verifier to the composite
-    pub fn add<V: Verifier + 'static>(mut self, verifier: V) -> Self {
+    pub fn add_verifier<V: Verifier + 'static>(mut self, verifier: V) -> Self {
         self.verifiers.push(Box::new(verifier));
         self
     }
@@ -197,8 +197,7 @@ impl Verifier for ContextVerifier {
             Ok(())
         } else {
             Err(StroopwafelError::CaveatViolation(format!(
-                "Predicate '{}' failed",
-                predicate_str
+                "Predicate '{predicate_str}' failed"
             )))
         }
     }
@@ -227,9 +226,7 @@ mod tests {
             if predicate == b"allowed" {
                 Ok(())
             } else {
-                Err(StroopwafelError::CaveatViolation(
-                    "Not allowed".to_string(),
-                ))
+                Err(StroopwafelError::CaveatViolation("Not allowed".to_string()))
             }
         });
 
@@ -245,21 +242,21 @@ mod tests {
 
     #[test]
     fn test_composite_verifier_single() {
-        let verifier = CompositeVerifier::new().add(AcceptAllVerifier);
+        let verifier = CompositeVerifier::new().add_verifier(AcceptAllVerifier);
         assert!(verifier.verify_caveat(b"anything").is_ok());
     }
 
     #[test]
     fn test_composite_verifier_multiple() {
         let verifier = CompositeVerifier::new()
-            .add(FnVerifier::new(|p| {
+            .add_verifier(FnVerifier::new(|p| {
                 if p == b"alice" {
                     Ok(())
                 } else {
                     Err(StroopwafelError::CaveatViolation("not alice".to_string()))
                 }
             }))
-            .add(FnVerifier::new(|p| {
+            .add_verifier(FnVerifier::new(|p| {
                 if p == b"bob" {
                     Ok(())
                 } else {

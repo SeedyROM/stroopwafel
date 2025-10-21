@@ -15,8 +15,7 @@ pub const SIGNATURE_SIZE: usize = 32;
 /// # Returns
 /// A 32-byte HMAC signature
 pub fn hmac_sha3(key: &[u8], message: &[u8]) -> [u8; SIGNATURE_SIZE] {
-    let mut mac = HmacSha3::new_from_slice(key)
-        .expect("HMAC can take key of any length");
+    let mut mac = HmacSha3::new_from_slice(key).expect("HMAC can take key of any length");
     mac.update(message);
     mac.finalize().into_bytes().into()
 }
