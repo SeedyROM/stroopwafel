@@ -1,4 +1,4 @@
-# Stroopwafel 🍪
+# Stroopwafel 🧇
 
 [![GitHub](https://img.shields.io/badge/github-stroopwafel-8da0cb?logo=github)](https://github.com/SeedyROM/stroopwafel)
 [![crates.io version](https://img.shields.io/crates/v/stroopwafel.svg)](https://crates.io/crates/stroopwafel)
@@ -306,4 +306,4 @@ Based on the original Macaroons design by Arnar Birgisson, Joe Gibbs Politz, Úl
 
 ---
 
-**Made with 🍪 and Rust**
+**Made with 🧇 and Rust**
