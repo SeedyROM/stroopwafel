@@ -20,7 +20,7 @@ Stroopwafels are bearer tokens that enable flexible, decentralized authorization
 - **Cryptographic Integrity**: HMAC-SHA3-256 signature chains prevent tampering
 - **First & Third-Party Caveats**: Verify locally or delegate to external services
 - **Multiple Serialization Formats**: JSON, MessagePack, Base64, Hex
-- **Zero-Copy Verification**: Efficient signature validation
+- **Efficient Verification**: Zero-allocation signature validation
 - **Type-Safe API**: Leverage Rust's type system for security
 
 ## Quick Start
@@ -88,15 +88,24 @@ token.add_first_party_caveat(b"resource = /documents/*");
 Delegate verification to external services:
 
 ```rust ignore
+// IMPORTANT: In production, you must encrypt the verification key
+// before adding a third-party caveat. This library does not handle
+// encryption - you are responsible for encrypting the key with a
+// key shared between you and the third-party service.
+
+// Example (encryption not shown):
+// let verification_key = generate_random_key();
+// let encrypted_vk = encrypt_for_third_party(verification_key, third_party_key);
+
 token.add_third_party_caveat(
     b"auth-service-check",
-    b"encrypted-verification-key",
+    b"encrypted-verification-key",  // This MUST be encrypted!
     "https://auth.example.com"
 );
 
-// Third party creates discharge macaroon
+// Third party decrypts the verification key and creates discharge macaroon
 let discharge = Stroopwafel::create_discharge(
-    b"encrypted-verification-key",
+    b"decrypted-verification-key",  // Third party decrypts this
     b"auth-service-check",
     Some("https://auth.example.com")
 );
@@ -153,6 +162,24 @@ token.add_first_party_caveat(b"name = alice");     // String
 token.add_first_party_caveat(b"time < 2025-12-31"); // String (ISO 8601)
 ```
 
+## Performance & Allocation Control
+
+Stroopwafel provides both convenient and allocation-conscious APIs:
+
+```rust ignore
+// Convenient API (clones primary)
+let prepared = primary.prepare_for_request(vec![discharge1, discharge2]);
+
+// Zero-clone API (consumes primary)
+let prepared = Stroopwafel::prepare_for_request_with(primary, vec![discharge1, discharge2]);
+
+// In-place binding (for manual control)
+let mut discharge = create_discharge(...);
+primary.bind_discharge_inplace(&mut discharge);
+```
+
+**Verification is allocation-efficient**: The `verify()` method operates on references and only allocates 32 bytes per caveat for signature chain reconstruction.
+
 ## Serialization
 
 Multiple formats supported:
@@ -184,6 +211,7 @@ let token = Stroopwafel::from_hex(&hex)?;
 3. **Validate caveats carefully**: Ensure your verifier logic is correct
 4. **Limit token lifetime**: Add time-based caveats to prevent indefinite use
 5. **Bind discharge macaroons**: Always use `prepare_for_request()` to bind discharges
+6. **Encrypt third-party verification keys**: The `verification_key_id` parameter in `add_third_party_caveat()` must contain an encrypted key, not plaintext. This library provides cryptographic primitives but does not handle key encryption.
 
 ### Cryptographic Details
 
@@ -234,19 +262,18 @@ cargo test -- --nocapture
 cargo test test_verify_valid_stroopwafel
 ```
 
-Current test coverage: **62 unit tests + 15 doc tests**
-
 ## Roadmap
 
 - [x] Core stroopwafel creation and verification
 - [x] First-party caveats with predicates
-- [x] Third-party caveats (basic support)
+- [x] Third-party caveats with discharge macaroons
 - [x] Multiple serialization formats
 - [x] Context-based verification
-- [ ] Full discharge macaroon workflow
-- [ ] Property-based testing
+- [x] Allocation-conscious API (in-place binding, zero-clone preparation)
+- [ ] Verification key encryption helpers for third-party caveats
+- [ ] Property-based testing (proptest/quickcheck)
 - [ ] Revocation support
-- [ ] Batch verification
+- [ ] Batch verification optimization
 
 ## Contributing
 
@@ -260,12 +287,12 @@ Contributions welcome! Please:
 
 ## License
 
-Licensed under either of:
+Dual licensed under your choice of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 (<http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license (<http://opensource.org/licenses/MIT>)
 
-at your option.
+See [LICENSE](LICENSE) for details.
 
 ## References
 

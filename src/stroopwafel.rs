@@ -88,9 +88,26 @@ impl Stroopwafel {
     ///
     /// Third-party caveats require verification by an external party.
     ///
+    /// # Important: Encryption Required
+    ///
+    /// According to the macaroons specification, the `verification_key_id` parameter
+    /// MUST contain an **encrypted** verification key, not plaintext. This library
+    /// does not perform encryption - you are responsible for:
+    ///
+    /// 1. Generating a fresh verification key `vk`
+    /// 2. Encrypting `vk` with a key shared between you and the third-party service
+    ///    (or using the third party's public key)
+    /// 3. Passing the encrypted result as `verification_key_id`
+    ///
+    /// The third party will decrypt `verification_key_id` to recover `vk`, then use
+    /// `vk` as the root key when creating the discharge macaroon.
+    ///
+    /// **Security Note**: Failing to encrypt the verification key allows anyone who
+    /// intercepts the macaroon to forge discharge macaroons for this caveat.
+    ///
     /// # Arguments
     /// * `caveat_id` - The caveat identifier
-    /// * `verification_key` - The encrypted verification key for the third party
+    /// * `verification_key_id` - The **encrypted** verification key for the third party
     /// * `location` - The location of the third-party verifier
     ///
     /// # Example
@@ -99,9 +116,13 @@ impl Stroopwafel {
     ///
     /// let root_key = b"secret";
     /// let mut stroopwafel = Stroopwafel::new(root_key, b"identifier", Some("http://example.com/"));
+    ///
+    /// // In production, you would encrypt the verification key here
+    /// // let encrypted_vk = encrypt_for_third_party(verification_key, third_party_public_key);
+    ///
     /// stroopwafel.add_third_party_caveat(
     ///     b"account = alice",
-    ///     b"encrypted_verification_key",
+    ///     b"encrypted_verification_key",  // This should be encrypted!
     ///     "https://auth.example.com"
     /// );
     /// ```
@@ -166,10 +187,44 @@ impl Stroopwafel {
         Self::new(verification_key, caveat_id, location)
     }
 
+    /// Binds a discharge macaroon to this stroopwafel's signature in-place
+    ///
+    /// This creates a cryptographic binding between the primary stroopwafel
+    /// and a discharge macaroon, preventing them from being used separately.
+    ///
+    /// This method modifies the discharge in-place, avoiding allocation.
+    ///
+    /// # Arguments
+    /// * `discharge` - The discharge macaroon to bind (modified in-place)
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::Stroopwafel;
+    ///
+    /// let root_key = b"secret";
+    /// let primary = Stroopwafel::new(root_key, b"primary", None::<String>);
+    ///
+    /// let mut discharge = Stroopwafel::create_discharge(
+    ///     b"verification_key",
+    ///     b"auth_required",
+    ///     None::<String>
+    /// );
+    ///
+    /// // Bind in-place (no allocation)
+    /// primary.bind_discharge_inplace(&mut discharge);
+    /// ```
+    pub fn bind_discharge_inplace(&self, discharge: &mut Stroopwafel) {
+        // Bind: new_sig = HMAC(discharge.signature, primary.signature)
+        discharge.signature = hmac_sha3(&discharge.signature, &self.signature);
+    }
+
     /// Binds a discharge macaroon to this stroopwafel's signature
     ///
     /// This creates a cryptographic binding between the primary stroopwafel
     /// and a discharge macaroon, preventing them from being used separately.
+    ///
+    /// This method clones the discharge and returns a new bound copy. For a
+    /// zero-allocation alternative, see [`bind_discharge_inplace`](Self::bind_discharge_inplace).
     ///
     /// # Arguments
     /// * `discharge` - The discharge macaroon to bind
@@ -178,10 +233,7 @@ impl Stroopwafel {
     /// A new discharge macaroon with an updated signature bound to this stroopwafel
     pub fn bind_discharge(&self, discharge: &Stroopwafel) -> Stroopwafel {
         let mut bound_discharge = discharge.clone();
-
-        // Bind: new_sig = HMAC(discharge.signature, primary.signature)
-        bound_discharge.signature = hmac_sha3(&discharge.signature, &self.signature);
-
+        self.bind_discharge_inplace(&mut bound_discharge);
         bound_discharge
     }
 
@@ -189,6 +241,10 @@ impl Stroopwafel {
     ///
     /// This method takes discharge macaroons and binds them to the primary stroopwafel,
     /// returning a vector containing the primary stroopwafel followed by all bound discharges.
+    ///
+    /// This is a convenience method that clones the primary stroopwafel. For more control
+    /// over allocations, use [`prepare_for_request_with`](Self::prepare_for_request_with)
+    /// or [`bind_discharge_inplace`](Self::bind_discharge_inplace).
     ///
     /// # Arguments
     /// * `discharges` - Discharge macaroons for third-party caveats
@@ -220,12 +276,66 @@ impl Stroopwafel {
     /// assert_eq!(stroopwafels.len(), 2); // Primary + 1 discharge
     /// ```
     pub fn prepare_for_request(&self, discharges: Vec<Stroopwafel>) -> Vec<Stroopwafel> {
-        let mut result = vec![self.clone()];
+        let mut result = Vec::with_capacity(1 + discharges.len());
+        result.push(self.clone());
 
-        for discharge in discharges {
-            result.push(self.bind_discharge(&discharge));
+        for mut discharge in discharges {
+            self.bind_discharge_inplace(&mut discharge);
+            result.push(discharge);
         }
 
+        result
+    }
+
+    /// Prepares stroopwafels for a request by binding all discharge macaroons
+    ///
+    /// This method takes ownership of the primary stroopwafel and binds all discharges
+    /// in-place, avoiding the clone of the primary that [`prepare_for_request`](Self::prepare_for_request)
+    /// performs.
+    ///
+    /// Use this when you don't need the primary stroopwafel after preparing the request.
+    ///
+    /// # Arguments
+    /// * `primary` - The primary stroopwafel (consumed)
+    /// * `discharges` - Discharge macaroons for third-party caveats
+    ///
+    /// # Returns
+    /// A vector with the primary stroopwafel first, followed by bound discharge macaroons
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::Stroopwafel;
+    ///
+    /// let root_key = b"secret";
+    /// let mut primary = Stroopwafel::new(root_key, b"primary", None::<String>);
+    /// primary.add_third_party_caveat(
+    ///     b"auth_required",
+    ///     b"verification_key",
+    ///     "https://auth.example.com"
+    /// );
+    ///
+    /// let discharge = Stroopwafel::create_discharge(
+    ///     b"verification_key",
+    ///     b"auth_required",
+    ///     Some("https://auth.example.com")
+    /// );
+    ///
+    /// // Zero-clone preparation (consumes primary)
+    /// let stroopwafels = Stroopwafel::prepare_for_request_with(primary, vec![discharge]);
+    /// assert_eq!(stroopwafels.len(), 2);
+    /// ```
+    pub fn prepare_for_request_with(
+        primary: Stroopwafel,
+        discharges: Vec<Stroopwafel>,
+    ) -> Vec<Stroopwafel> {
+        let mut result = Vec::with_capacity(1 + discharges.len());
+
+        for mut discharge in discharges {
+            primary.bind_discharge_inplace(&mut discharge);
+            result.push(discharge);
+        }
+
+        result.push(primary);
         result
     }
 
