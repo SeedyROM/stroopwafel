@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod caveat;
 pub mod crypto;
 pub mod error;

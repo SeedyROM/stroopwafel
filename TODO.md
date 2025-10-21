@@ -248,7 +248,7 @@ Implementing macaroons (authorization tokens with contextual caveats) based on t
   - SHA3-based test vectors generated through tests
   - All tests verify expected outputs
 
-- [ ] **13.4**: Add benchmarks
+- [x] **13.4**: Add benchmarks
   - Stroopwafel creation performance
   - Verification performance
   - Serialization performance

@@ -17,3 +17,8 @@ tracing = "0.1.41"
 
 [dev-dependencies]
 rand = "0.9.2"
+criterion = "0.5"
+
+[[bench]]
+name = "stroopwafel_bench"
+harness = false
