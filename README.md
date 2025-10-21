@@ -1,5 +1,10 @@
 # Stroopwafel 🍪
 
+[![GitHub](https://img.shields.io/badge/github-stroopwafel-8da0cb?logo=github)](https://github.com/SeedyROM/stroopwafel)
+[![crates.io version](https://img.shields.io/crates/v/stroopwafel.svg)](https://crates.io/crates/stroopwafel)
+[![docs.rs docs](https://docs.rs/stroopwafel/badge.svg)](https://docs.rs/stroopwafel)
+[![crates.io version](https://img.shields.io/crates/l/stroopwafel.svg)](https://github.com/SeedyROM/stroopwafel/blob/main/LICENSE)
+
 A Rust implementation of **Macaroons** - authorization tokens with contextual caveats for decentralized authorization.
 
 > **Why "Stroopwafel"?** Because Dutch cookies are better than French macarons! Plus, it's more fun to say.
@@ -29,7 +34,7 @@ stroopwafel = "0.1.0"
 
 ### Basic Example
 
-```rust,ignore
+```rust ignore
 use stroopwafel::{Stroopwafel, verifier::ContextVerifier};
 
 // 1. Mint a new token (server-side)
@@ -63,7 +68,7 @@ token.verify(root_key, &verifier, &[])?;
 
 Create a new stroopwafel with a secret root key:
 
-```rust,ignore
+```rust ignore
 let root_key = b"secret-key-only-server-knows";
 let token = Stroopwafel::new(root_key, b"user-id-123", None::<String>);
 ```
@@ -72,7 +77,7 @@ let token = Stroopwafel::new(root_key, b"user-id-123", None::<String>);
 
 Add restrictions verified by your service:
 
-```rust,ignore
+```rust ignore
 token.add_first_party_caveat(b"account = alice");
 token.add_first_party_caveat(b"action = read");
 token.add_first_party_caveat(b"resource = /documents/*");
@@ -82,7 +87,7 @@ token.add_first_party_caveat(b"resource = /documents/*");
 
 Delegate verification to external services:
 
-```rust,ignore
+```rust ignore
 token.add_third_party_caveat(
     b"auth-service-check",
     b"encrypted-verification-key",
@@ -104,7 +109,7 @@ let prepared = token.prepare_for_request(vec![discharge]);
 
 Verify tokens with custom logic:
 
-```rust,ignore
+```rust ignore
 use stroopwafel::verifier::{ContextVerifier, FnVerifier};
 
 // Context-based verification (recommended)
@@ -142,7 +147,7 @@ Built-in support for common comparison operators:
 
 Both numeric and string comparisons are supported:
 
-```rust,ignore
+```rust ignore
 token.add_first_party_caveat(b"age >= 21");        // Numeric
 token.add_first_party_caveat(b"name = alice");     // String
 token.add_first_party_caveat(b"time < 2025-12-31"); // String (ISO 8601)
@@ -152,7 +157,7 @@ token.add_first_party_caveat(b"time < 2025-12-31"); // String (ISO 8601)
 
 Multiple formats supported:
 
-```rust,ignore
+```rust ignore
 // MessagePack (binary, compact)
 let bytes = token.to_msgpack()?;
 let token = Stroopwafel::from_msgpack(&bytes)?;
