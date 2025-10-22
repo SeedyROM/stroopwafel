@@ -218,6 +218,7 @@ let token = Stroopwafel::from_hex(&hex)?;
 - **Algorithm**: HMAC-SHA3-256 (Keccak-256)
 - **Signature Size**: 32 bytes
 - **Chaining**: Each caveat updates the signature via HMAC
+- **Constant-Time Comparison**: Signature verification uses constant-time equality to prevent timing attacks
 - **No Encryption**: Caveats are not encrypted (don't put secrets in them!)
 
 ## Examples

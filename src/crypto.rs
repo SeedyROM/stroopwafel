@@ -1,5 +1,6 @@
 use hmac::{Hmac, Mac};
 use sha3::Sha3_256;
+use subtle::ConstantTimeEq;
 
 type HmacSha3 = Hmac<Sha3_256>;
 
@@ -32,6 +33,22 @@ pub fn hmac_sha3(key: &[u8], message: &[u8]) -> [u8; SIGNATURE_SIZE] {
 /// A new 32-byte signature
 pub fn bind_caveat(signature: &[u8], caveat_id: &[u8]) -> [u8; SIGNATURE_SIZE] {
     hmac_sha3(signature, caveat_id)
+}
+
+/// Compares two signatures in constant time to prevent timing attacks
+///
+/// # Arguments
+/// * `a` - First signature
+/// * `b` - Second signature
+///
+/// # Returns
+/// `true` if the signatures are equal, `false` otherwise
+///
+/// # Security
+/// This function uses constant-time comparison to prevent timing side-channel
+/// attacks that could leak information about the signature.
+pub fn signatures_equal(a: &[u8; SIGNATURE_SIZE], b: &[u8; SIGNATURE_SIZE]) -> bool {
+    a.ct_eq(b).into()
 }
 
 #[cfg(test)]
@@ -97,5 +114,32 @@ mod tests {
 
         assert_eq!(sig2, reconstructed_sig2);
         assert_eq!(sig3, reconstructed_sig3);
+    }
+
+    #[test]
+    fn test_signatures_equal_true() {
+        let sig1 = hmac_sha3(b"key", b"message");
+        let sig2 = hmac_sha3(b"key", b"message");
+
+        assert!(signatures_equal(&sig1, &sig2));
+    }
+
+    #[test]
+    fn test_signatures_equal_false() {
+        let sig1 = hmac_sha3(b"key1", b"message");
+        let sig2 = hmac_sha3(b"key2", b"message");
+
+        assert!(!signatures_equal(&sig1, &sig2));
+    }
+
+    #[test]
+    fn test_signatures_equal_one_bit_difference() {
+        let mut sig1 = hmac_sha3(b"key", b"message");
+        let sig2 = sig1;
+
+        // Flip one bit
+        sig1[0] ^= 0x01;
+
+        assert!(!signatures_equal(&sig1, &sig2));
     }
 }

@@ -1,5 +1,5 @@
 use crate::caveat::Caveat;
-use crate::crypto::{SIGNATURE_SIZE, bind_caveat, hmac_sha3};
+use crate::crypto::{SIGNATURE_SIZE, bind_caveat, hmac_sha3, signatures_equal};
 use crate::verifier::Verifier;
 use crate::{Result, StroopwafelError};
 use serde::{Deserialize, Serialize};
@@ -386,8 +386,8 @@ impl Stroopwafel {
             }
         }
 
-        // Step 2: Verify the signature matches
-        if computed_signature != self.signature {
+        // Step 2: Verify the signature matches (constant-time comparison)
+        if !signatures_equal(&computed_signature, &self.signature) {
             return Err(StroopwafelError::InvalidSignature);
         }
 
@@ -459,8 +459,8 @@ impl Stroopwafel {
         // Step 2: Bind with primary signature
         let expected_signature = hmac_sha3(&computed_signature, primary_signature);
 
-        // Step 3: Verify the bound signature matches
-        if expected_signature != self.signature {
+        // Step 3: Verify the bound signature matches (constant-time comparison)
+        if !signatures_equal(&expected_signature, &self.signature) {
             return Err(StroopwafelError::InvalidSignature);
         }
 
