@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![allow(rustdoc::broken_intra_doc_links)]
 
 pub mod caveat;
 pub mod crypto;

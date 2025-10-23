@@ -68,7 +68,7 @@ fn main() {
         .with("resource", "/api/documents")
         .with("auth_level", "10"); // User has auth level 10
 
-    match primary.verify(root_key, &full_verifier, &[bound_discharge.clone()]) {
+    match primary.verify(root_key, &full_verifier, std::slice::from_ref(&bound_discharge)) {
         Ok(_) => println!("   ✓ Verification successful! Access granted."),
         Err(e) => println!("   ✗ Verification failed: {e}"),
     }
@@ -79,7 +79,7 @@ fn main() {
         .with("resource", "/api/documents")
         .with("auth_level", "3"); // Only level 3 (need >= 5)
 
-    match primary.verify(root_key, &weak_verifier, &[bound_discharge.clone()]) {
+    match primary.verify(root_key, &weak_verifier, std::slice::from_ref(&bound_discharge)) {
         Ok(_) => println!("   ✗ Unexpectedly succeeded!"),
         Err(e) => println!("   ✓ Correctly failed: {e}"),
     }
