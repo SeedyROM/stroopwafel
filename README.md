@@ -252,6 +252,8 @@ cargo bench
 
 ## Testing
 
+### Unit & Integration Tests
+
 ```bash
 # Run all tests
 cargo test
@@ -263,6 +265,39 @@ cargo test -- --nocapture
 cargo test test_verify_valid_stroopwafel
 ```
 
+### Property-Based Testing
+
+The library includes comprehensive property tests that verify cryptographic invariants and roundtrip properties:
+
+```bash
+# Run property tests (10,000 iterations per test by default)
+cargo test --test proptests
+
+# Run with verbose output
+cargo test --test proptests -- --nocapture
+```
+
+Property tests verify:
+- Serialization/deserialization roundtrips across all formats
+- Signature verification invariants
+- Caveat addition preserves validity
+- Discharge binding correctness
+- Time-based expiration edge cases
+
+### Fuzz Testing
+
+For even more thorough testing, run the fuzz test suite:
+
+```bash
+# Quick smoke test (5 seconds per target)
+cd fuzz && ./run_all.sh 5
+
+# Standard fuzzing session (60 seconds per target)
+cd fuzz && ./run_all.sh
+```
+
+See [FUZZ.md](FUZZ.md) for detailed fuzzing documentation.
+
 ## Roadmap
 
 - [x] Core stroopwafel creation and verification
@@ -271,8 +306,9 @@ cargo test test_verify_valid_stroopwafel
 - [x] Multiple serialization formats
 - [x] Context-based verification
 - [x] Allocation-conscious API (in-place binding, zero-clone preparation)
+- [x] Property-based testing (proptest)
+- [x] Fuzz testing (cargo-fuzz)
 - [ ] Verification key encryption helpers for third-party caveats
-- [ ] Property-based testing (proptest/quickcheck)
 - [ ] Revocation support
 - [ ] Batch verification optimization
 
