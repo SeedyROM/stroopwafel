@@ -12,164 +12,7 @@ env:
 
 jobs:
   test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rust: stable
-            os: ubuntu-latest
-            label: "Stable / Ubuntu"
-          - rust: stable
-            os: macos-latest
-            label: "Stable / macOS"
-          - rust: stable
-            os: windows-latest
-            label: "Stable / Windows"
-          - rust: beta
-            os: ubuntu-latest
-            label: "Beta / Ubuntu"
-          - rust: 1.85.0
-            os: ubuntu-latest
-            label: "MSRV / Ubuntu"
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust ${{ matrix.rust }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-index-
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-build-
-
-      - name: Run tests
-        run: cargo test --all-features --verbose
-
-      - name: Run tests (no default features)
-        run: cargo test --no-default-features --verbose
-
-      - name: Run doc tests
-        run: cargo test --doc --verbose
-
-  proptest:
-    name: Property Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rust: stable
-            os: ubuntu-latest
-            label: "Stable / Ubuntu"
-          - rust: stable
-            os: macos-latest
-            label: "Stable / macOS"
-          - rust: stable
-            os: windows-latest
-            label: "Stable / Windows"
-          - rust: beta
-            os: ubuntu-latest
-            label: "Beta / Ubuntu"
-          - rust: 1.85.0
-            os: ubuntu-latest
-            label: "MSRV / Ubuntu"
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust ${{ matrix.rust }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-proptest-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-proptest-
-
-      - name: Run property tests
-        run: cargo test --test proptests --verbose
-
-  fuzz:
-    name: Fuzz Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            fuzz/target
-          key: ${{ runner.os }}-nightly-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-nightly-cargo-fuzz-
-
-      - name: Run fuzz tests (5 seconds each)
-        run: |
-          cd fuzz
-          chmod +x run_all.sh
-          ./run_all.sh 5
-
-  fmt:
-    name: Formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
+    name: Test (${{ matrix.rust }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -202,12 +45,41 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-clippy-
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-
+
+      - name: Run tests
+        run: cargo test --all-features --verbose
+
+      - name: Run tests (no default features)
+        run: cargo test --no-default-features --verbose
+
+      - name: Run doc tests
+        run: cargo test --doc --verbose
+
+      - name: Run property tests
+        run: cargo test --test proptests --verbose
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check benchmarks compile
+        run: cargo bench --no-run
+
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
   docs:
     name: Documentation
@@ -234,31 +106,22 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-  bench:
-    name: Benchmarks
+  fuzz:
+    name: Fuzz Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - rust: stable
-            os: ubuntu-latest
-          - rust: stable
-            os: macos-latest
-          - rust: stable
-            os: windows-latest
-          - rust: beta
-            os: ubuntu-latest
-          - rust: 1.85.0
-            os: ubuntu-latest
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust ${{ matrix.rust }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -266,13 +129,30 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+            fuzz/target
+          key: ${{ runner.os }}-nightly-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.rust }}-cargo-bench-
+            ${{ runner.os }}-nightly-cargo-fuzz-
 
-      - name: Run benchmarks (sanity check)
-        run: cargo bench --no-run
+      - name: Run fuzz tests (5 seconds each)
+        run: |
+          cd fuzz
+          chmod +x run_all.sh
+          ./run_all.sh 5
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # coverage:
   #   name: Code Coverage
@@ -305,17 +185,3 @@ jobs:
   #       with:
   #         files: ./cobertura.xml
   #         fail_ci_if_error: false
-
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run cargo audit
-        uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
