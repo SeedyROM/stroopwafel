@@ -384,7 +384,7 @@ mod tests {
 
         // Should pass: time is less than (now + 1 hour)
         let future = now + 3600;
-        let caveat = format!("time < {}", future);
+        let caveat = format!("time < {future}");
         assert!(verifier.verify_caveat(caveat.as_bytes()).is_ok());
 
         // Should fail: time is greater than 1 (time in the past)
@@ -409,7 +409,7 @@ mod tests {
             .as_secs();
 
         let future = now + 3600;
-        let caveat = format!("time < {}", future);
+        let caveat = format!("time < {future}");
         assert!(verifier.verify_caveat(caveat.as_bytes()).is_ok());
     }
 }

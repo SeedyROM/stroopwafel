@@ -196,7 +196,7 @@ fn bench_third_party_caveats(c: &mut Criterion) {
                 .verify(
                     black_box(root_key),
                     black_box(&verifier),
-                    black_box(&[bound_discharge.clone()]),
+                    black_box(std::slice::from_ref(&bound_discharge)),
                 )
                 .unwrap();
             black_box(())

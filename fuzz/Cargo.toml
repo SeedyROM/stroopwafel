@@ -1,0 +1,42 @@
+[package]
+name = "stroopwafel-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.stroopwafel]
+path = ".."
+
+[[bin]]
+name = "fuzz_serialization"
+path = "fuzz_targets/fuzz_serialization.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_verification"
+path = "fuzz_targets/fuzz_verification.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_predicates"
+path = "fuzz_targets/fuzz_predicates.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_caveats"
+path = "fuzz_targets/fuzz_caveats.rs"
+test = false
+doc = false
+bench = false
