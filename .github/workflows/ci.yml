@@ -17,8 +17,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, 1.85.0]  # 1.85.0 is MSRV for edition 2024
+        include:
+          - rust: stable
+            os: ubuntu-latest
+            label: "Stable / Ubuntu"
+          - rust: stable
+            os: macos-latest
+            label: "Stable / macOS"
+          - rust: stable
+            os: windows-latest
+            label: "Stable / Windows"
+          - rust: beta
+            os: ubuntu-latest
+            label: "Beta / Ubuntu"
+          - rust: 1.85.0
+            os: ubuntu-latest
+            label: "MSRV / Ubuntu"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -31,19 +46,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-
 
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-index-
 
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-build-
 
       - name: Run tests
         run: cargo test --all-features --verbose
@@ -56,12 +77,34 @@ jobs:
 
   proptest:
     name: Property Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: stable
+            os: ubuntu-latest
+            label: "Stable / Ubuntu"
+          - rust: stable
+            os: macos-latest
+            label: "Stable / macOS"
+          - rust: stable
+            os: windows-latest
+            label: "Stable / Windows"
+          - rust: beta
+            os: ubuntu-latest
+            label: "Beta / Ubuntu"
+          - rust: 1.85.0
+            os: ubuntu-latest
+            label: "MSRV / Ubuntu"
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -70,14 +113,21 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-proptest-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-proptest-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-proptest-
 
       - name: Run property tests
         run: cargo test --test proptests --verbose
 
   fuzz:
-    name: Fuzz Tests (Quick)
-    runs-on: ubuntu-latest
+    name: Fuzz Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -94,11 +144,14 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             fuzz/target
-          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-nightly-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nightly-cargo-fuzz-
 
       - name: Run fuzz tests (5 seconds each)
         run: |
           cd fuzz
+          chmod +x run_all.sh
           ./run_all.sh 5
 
   fmt:
@@ -117,13 +170,29 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: stable
+            os: ubuntu-latest
+          - rust: stable
+            os: macos-latest
+          - rust: stable
+            os: windows-latest
+          - rust: beta
+            os: ubuntu-latest
+          - rust: 1.85.0
+            os: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ matrix.rust }}
           components: clippy
 
       - name: Cache cargo
@@ -133,7 +202,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-clippy-
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -154,7 +225,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-stable-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-stable-cargo-docs-
 
       - name: Check documentation
         run: cargo doc --no-deps --all-features
@@ -163,12 +236,29 @@ jobs:
 
   bench:
     name: Benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: stable
+            os: ubuntu-latest
+          - rust: stable
+            os: macos-latest
+          - rust: stable
+            os: windows-latest
+          - rust: beta
+            os: ubuntu-latest
+          - rust: 1.85.0
+            os: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -177,40 +267,44 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-bench-
 
       - name: Run benchmarks (sanity check)
         run: cargo bench --no-run
 
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # coverage:
+  #   name: Code Coverage
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+  #     - name: Install Rust stable
+  #       uses: dtolnay/rust-toolchain@stable
 
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
+  #     - name: Install tarpaulin
+  #       run: cargo install cargo-tarpaulin
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+  #     - name: Cache cargo
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           ~/.cargo/registry
+  #           ~/.cargo/git
+  #           target
+  #         key: ${{ runner.os }}-stable-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-stable-cargo-coverage-
 
-      - name: Generate coverage
-        run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+  #     - name: Generate coverage
+  #       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./cobertura.xml
-          fail_ci_if_error: false
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v4
+  #       with:
+  #         files: ./cobertura.xml
+  #         fail_ci_if_error: false
 
   security:
     name: Security Audit
