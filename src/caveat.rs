@@ -12,7 +12,13 @@ pub struct Caveat {
     /// This is the encrypted verification key
     pub verification_key_id: Option<Vec<u8>>,
 
-    /// Optional location of the third-party verifier
+    /// Optional location hint for this caveat.
+    ///
+    /// **Important**: This is a hint/metadata field only and is NOT verified by
+    /// this library. For third-party caveats, it typically indicates where to
+    /// obtain a discharge macaroon. The library does not enforce that discharges
+    /// come from this location. Applications must perform their own location
+    /// validation if required.
     pub location: Option<String>,
 }
 

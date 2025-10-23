@@ -10,7 +10,12 @@ use serde::{Deserialize, Serialize};
 /// authorization and delegation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stroopwafel {
-    /// Optional location hint for the target service
+    /// Optional location hint for the target service.
+    ///
+    /// **Important**: This is a hint/metadata field only and is NOT verified during
+    /// signature validation. Applications may use this to determine where to send
+    /// the stroopwafel, but the library itself does not enforce or validate it.
+    /// Security is enforced through cryptographic signature verification.
     pub location: Option<String>,
 
     /// Public identifier for this stroopwafel
