@@ -19,10 +19,6 @@ pub enum StroopwafelError {
     #[error("Invalid format: {0}")]
     InvalidFormat(String),
 
-    /// The stroopwafel has expired
-    #[error("Token has expired")]
-    ExpiredToken,
-
     /// Cryptographic operation failed
     #[error("Cryptographic error: {0}")]
     CryptoError(String),

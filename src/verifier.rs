@@ -1,6 +1,7 @@
 use crate::predicate::Predicate;
 use crate::{Result, StroopwafelError};
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A verifier checks whether caveat predicates are satisfied
 ///
@@ -184,6 +185,56 @@ impl ContextVerifier {
     pub fn set(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.context.insert(key.into(), value.into());
     }
+
+    /// Creates a context verifier with the current system time.
+    ///
+    /// This is a convenience method for time-based caveat validation. It adds
+    /// a "time" key with the current Unix timestamp.
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::verifier::{Verifier, ContextVerifier};
+    /// use stroopwafel::Stroopwafel;
+    ///
+    /// let root_key = b"secret";
+    /// let mut token = Stroopwafel::new(root_key, b"identifier", None::<String>);
+    ///
+    /// // Add a time-based caveat: expires in the future
+    /// token.add_first_party_caveat(b"time < 9999999999");
+    ///
+    /// // Verify with current time
+    /// let verifier = ContextVerifier::with_current_time();
+    /// assert!(token.verify(root_key, &verifier, &[]).is_ok());
+    /// ```
+    pub fn with_current_time() -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before UNIX epoch")
+            .as_secs();
+
+        Self::empty().with("time", now.to_string())
+    }
+
+    /// Adds the current system time to an existing context verifier.
+    ///
+    /// This sets the "time" key to the current Unix timestamp.
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::verifier::ContextVerifier;
+    ///
+    /// let verifier = ContextVerifier::empty()
+    ///     .with("account", "alice")
+    ///     .with_time();
+    /// ```
+    pub fn with_time(self) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before UNIX epoch")
+            .as_secs();
+
+        self.with("time", now.to_string())
+    }
 }
 
 impl Verifier for ContextVerifier {
@@ -317,5 +368,48 @@ mod tests {
 
         let result = verifier.verify_caveat(b"not a valid predicate");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_context_verifier_with_current_time() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let verifier = ContextVerifier::with_current_time();
+
+        // Get current time for comparison
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Should pass: time is less than (now + 1 hour)
+        let future = now + 3600;
+        let caveat = format!("time < {}", future);
+        assert!(verifier.verify_caveat(caveat.as_bytes()).is_ok());
+
+        // Should fail: time is greater than 1 (time in the past)
+        assert!(verifier.verify_caveat(b"time < 1").is_err());
+    }
+
+    #[test]
+    fn test_context_verifier_with_time() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let verifier = ContextVerifier::empty()
+            .with("account", "alice")
+            .with_time();
+
+        // Should have both account and time
+        assert!(verifier.verify_caveat(b"account = alice").is_ok());
+
+        // Get current time
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let future = now + 3600;
+        let caveat = format!("time < {}", future);
+        assert!(verifier.verify_caveat(caveat.as_bytes()).is_ok());
     }
 }

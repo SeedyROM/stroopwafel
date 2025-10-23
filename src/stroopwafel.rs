@@ -8,6 +8,30 @@ use serde::{Deserialize, Serialize};
 ///
 /// Stroopwafels use chained HMAC-SHA3-256 signatures to allow for decentralized
 /// authorization and delegation.
+///
+/// # Time-Based Expiration
+///
+/// This library does not include built-in expiration timestamps. Instead, use
+/// time-based caveats for expiration:
+///
+/// ```
+/// use stroopwafel::{Stroopwafel, verifier::ContextVerifier};
+/// use std::time::{SystemTime, UNIX_EPOCH};
+///
+/// let root_key = b"secret";
+/// let mut token = Stroopwafel::new(root_key, b"session_123", None::<String>);
+///
+/// // Set expiration: current time + 1 hour
+/// let expiry = SystemTime::now()
+///     .duration_since(UNIX_EPOCH)
+///     .unwrap()
+///     .as_secs() + 3600;
+/// token.add_first_party_caveat(format!("time < {}", expiry).as_bytes());
+///
+/// // Verify with current time
+/// let verifier = ContextVerifier::with_current_time();
+/// assert!(token.verify(root_key, &verifier, &[]).is_ok());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stroopwafel {
     /// Optional location hint for the target service.
