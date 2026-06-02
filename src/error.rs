@@ -26,4 +26,8 @@ pub enum StroopwafelError {
     /// Invalid key length
     #[error("Invalid key length")]
     InvalidKeyLength,
+
+    /// The stroopwafel has been revoked
+    #[error("Stroopwafel revoked: {0}")]
+    Revoked(String),
 }

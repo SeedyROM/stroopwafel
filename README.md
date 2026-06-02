@@ -5,25 +5,25 @@
 [![docs.rs docs](https://docs.rs/stroopwafel/badge.svg)](https://docs.rs/stroopwafel)
 [![crates.io version](https://img.shields.io/crates/l/stroopwafel.svg)](https://github.com/SeedyROM/stroopwafel/blob/main/LICENSE)
 
-A Rust implementation of **Macaroons** - authorization tokens with contextual caveats for decentralized authorization.
+A Rust implementation of **Macaroons**: authorization tokens with contextual caveats for decentralized authorization.
 
 > **Why "Stroopwafel"?** Because Dutch cookies are better than French macarons! Plus, it's more fun to say.
 
 ## Overview
 
-Stroopwafels are bearer tokens that enable flexible, decentralized authorization through **caveats** - contextual restrictions that can be added to tokens without invalidating their cryptographic integrity. Based on the paper ["Macaroons: Cookies with Contextual Caveats for Decentralized Authorization in the Cloud"](https://research.google/pubs/pub41892/) by Birgisson et al. (NDSS 2014).
+Stroopwafels are bearer tokens that support flexible, decentralized authorization through **caveats**: contextual restrictions that can be added to tokens without invalidating their cryptographic integrity. Based on the paper ["Macaroons: Cookies with Contextual Caveats for Decentralized Authorization in the Cloud"](https://research.google/pubs/pub41892/) by Birgisson et al. (NDSS 2014).
 
-### Key Features
+### Features
 
-- **Decentralized Authorization**: Delegate authority without central coordination
-- **Contextual Caveats**: Add restrictions like time limits, account permissions, IP ranges
-- **Cryptographic Integrity**: HMAC-SHA3-256 signature chains prevent tampering
-- **First & Third-Party Caveats**: Verify locally or delegate to external services
-- **Multiple Serialization Formats**: JSON, MessagePack, Base64, Hex
-- **Efficient Verification**: Zero-allocation signature validation
-- **Type-Safe API**: Leverage Rust's type system for security
+- Delegate authority without central coordination
+- Add restrictions like time limits, account permissions, IP ranges
+- HMAC-SHA3-256 signature chains prevent tampering
+- First and third-party caveats: verify locally or delegate to external services
+- Multiple serialization formats: JSON, MessagePack, Base64, Hex
+- Zero-allocation signature validation
+- Type-safe API via Rust's type system
 
-## Quick Start
+## Quick start
 
 Add to your `Cargo.toml`:
 
@@ -32,7 +32,7 @@ Add to your `Cargo.toml`:
 stroopwafel = "0.1.0"
 ```
 
-### Basic Example
+### Basic example
 
 ```rust ignore
 use stroopwafel::{Stroopwafel, verifier::ContextVerifier};
@@ -62,7 +62,7 @@ let verifier = ContextVerifier::empty()
 token.verify(root_key, &verifier, &[])?;
 ```
 
-## Core Concepts
+## Core concepts
 
 ### Minting
 
@@ -73,7 +73,7 @@ let root_key = b"secret-key-only-server-knows";
 let token = Stroopwafel::new(root_key, b"user-id-123", None::<String>);
 ```
 
-### First-Party Caveats
+### First-party caveats
 
 Add restrictions verified by your service:
 
@@ -83,7 +83,7 @@ token.add_first_party_caveat(b"action = read");
 token.add_first_party_caveat(b"resource = /documents/*");
 ```
 
-### Third-Party Caveats
+### Third-party caveats
 
 Delegate verification to external services:
 
@@ -141,7 +141,7 @@ let verifier = FnVerifier::new(|predicate| {
 });
 ```
 
-## Predicate System
+## Predicate system
 
 Built-in support for common comparison operators:
 
@@ -153,6 +153,8 @@ Built-in support for common comparison operators:
 | `>` | Greater than | `level > 5` |
 | `<=` | Less than or equal | `requests <= 100` |
 | `>=` | Greater than or equal | `score >= 50` |
+| `~` | Glob match | `resource ~ /api/*` |
+| `!~` | Glob not-match | `resource !~ /internal/*` |
 
 Both numeric and string comparisons are supported:
 
@@ -162,7 +164,109 @@ token.add_first_party_caveat(b"name = alice");     // String
 token.add_first_party_caveat(b"time < 2025-12-31"); // String (ISO 8601)
 ```
 
-## Performance & Allocation Control
+### Glob / prefix matching
+
+The `~` operator matches a context value against a glob pattern. Supported wildcards:
+
+- `*` — matches zero or more characters
+- `?` — matches exactly one character
+
+```rust ignore
+// Restrict access to a path prefix
+token.add_first_party_caveat(b"resource ~ /documents/*");
+
+// Allow only versioned API paths
+token.add_first_party_caveat(b"path ~ /api/v?/*");
+
+// Block internal resources
+token.add_first_party_caveat(b"resource !~ /internal/*");
+```
+
+Verify by providing the actual resource in the context:
+
+```rust ignore
+let verifier = ContextVerifier::empty()
+    .with("resource", "/documents/readme.md");
+
+token.verify(root_key, &verifier, &[])?; // passes: /documents/readme.md matches /documents/*
+```
+
+## Third-party caveat encryption
+
+The library provides helpers for encrypting verification keys before passing them to
+`add_third_party_caveat`. Both sides share a secret; the issuer encrypts, the third
+party decrypts to recover the verification key:
+
+```rust ignore
+use stroopwafel::encryption::{encrypt_verification_key, decrypt_verification_key};
+
+// Issuer side: encrypt the verification key with the shared secret
+let shared_secret = b"key-shared-between-issuer-and-auth-service";
+let vk = b"fresh-random-verification-key";
+let encrypted_vk = encrypt_verification_key(shared_secret, vk)?;
+
+token.add_third_party_caveat(b"auth-check", encrypted_vk, "https://auth.example.com");
+
+// Third-party side: decrypt to get the verification key, then create a discharge
+let verification_key = decrypt_verification_key(shared_secret, &encrypted_vk)?;
+let discharge = Stroopwafel::create_discharge(&verification_key, b"auth-check", Some("https://auth.example.com"));
+```
+
+Encryption uses **ChaCha20-Poly1305** with a random 96-bit nonce per call. The shared
+secret can be any length; it is key-derived (HMAC-SHA3-256) to exactly 32 bytes before
+use. The output format is `nonce (12 bytes) || ciphertext+tag`.
+
+## Revocation
+
+Check whether a token has been revoked before verifying it by using
+`verify_checked` with a [`RevocationChecker`]:
+
+```rust ignore
+use stroopwafel::revocation::RevocationList;
+
+let mut revoked = RevocationList::new();
+revoked.revoke(b"session-to-invalidate");
+
+// verify_checked rejects revoked identifiers before any cryptographic work
+token.verify_checked(root_key, &verifier, &[], &revoked)?;
+```
+
+The built-in `RevocationList` is an in-memory `HashSet`. For production use,
+implement the `RevocationChecker` trait against your own persistent store (Redis,
+database, etc.):
+
+```rust ignore
+use stroopwafel::RevocationChecker;
+
+struct MyStore { /* ... */ }
+
+impl RevocationChecker for MyStore {
+    fn is_revoked(&self, identifier: &[u8]) -> bool {
+        // query your store
+        false
+    }
+}
+```
+
+## Batch verification
+
+Verify multiple tokens sharing the same root key with `verify_batch` (collects all
+results) or `verify_all` (fails fast):
+
+```rust ignore
+// Collect all results — useful for audit logging
+let results = Stroopwafel::verify_batch([&t1, &t2, &t3], root_key, &verifier, &[]);
+for (i, result) in results.iter().enumerate() {
+    if let Err(e) = result {
+        eprintln!("Token {i} failed: {e}");
+    }
+}
+
+// Fail on first error
+Stroopwafel::verify_all([&t1, &t2, &t3], root_key, &verifier, &[])?;
+```
+
+## Performance and allocation control
 
 Stroopwafel provides both convenient and allocation-conscious APIs:
 
@@ -178,7 +282,7 @@ let mut discharge = create_discharge(...);
 primary.bind_discharge_inplace(&mut discharge);
 ```
 
-**Verification is allocation-efficient**: The `verify()` method operates on references and only allocates 32 bytes per caveat for signature chain reconstruction.
+`verify()` operates on references and only allocates 32 bytes per caveat for signature chain reconstruction.
 
 ## Serialization
 
@@ -202,24 +306,26 @@ let hex = token.to_hex()?;
 let token = Stroopwafel::from_hex(&hex)?;
 ```
 
-## Security Considerations
+## Security considerations
 
-### Best Practices
+### Best practices
 
-1. **Keep root keys secret**: Only the issuing service should know the root key
-2. **Use HTTPS**: Always transmit tokens over encrypted connections
-3. **Validate caveats carefully**: Ensure your verifier logic is correct
-4. **Limit token lifetime**: Add time-based caveats to prevent indefinite use
-5. **Bind discharge macaroons**: Always use `prepare_for_request()` to bind discharges
-6. **Encrypt third-party verification keys**: The `verification_key_id` parameter in `add_third_party_caveat()` must contain an encrypted key, not plaintext. This library provides cryptographic primitives but does not handle key encryption.
+1. **Keep root keys secret**: only the issuing service should know the root key
+2. **Use HTTPS**: always transmit tokens over encrypted connections
+3. **Validate caveats carefully**: ensure your verifier logic is correct
+4. **Limit token lifetime**: add time-based caveats to prevent indefinite use
+5. **Bind discharge macaroons**: always use `prepare_for_request()` to bind discharges
+6. **Encrypt third-party verification keys**: the `verification_key_id` parameter in `add_third_party_caveat()` must contain an encrypted key, not plaintext. This library provides cryptographic primitives but does not handle key encryption.
 
-### Cryptographic Details
+### Cryptographic details
 
-- **Algorithm**: HMAC-SHA3-256 (Keccak-256)
-- **Signature Size**: 32 bytes
-- **Chaining**: Each caveat updates the signature via HMAC
-- **Constant-Time Comparison**: Signature verification uses constant-time equality to prevent timing attacks
-- **No Encryption**: Caveats are not encrypted (don't put secrets in them!)
+| Detail | Value |
+|--------|-------|
+| Algorithm | HMAC-SHA3-256 (Keccak-256) |
+| Signature size | 32 bytes |
+| Chaining | Each caveat updates the signature via HMAC |
+| Timing attacks | Constant-time equality prevents timing side-channels |
+| Caveats | Not encrypted (don't put secrets in them!) |
 
 ## Examples
 
@@ -252,7 +358,7 @@ cargo bench
 
 ## Testing
 
-### Unit & Integration Tests
+### Unit and integration tests
 
 ```bash
 # Run all tests
@@ -265,9 +371,9 @@ cargo test -- --nocapture
 cargo test test_verify_valid_stroopwafel
 ```
 
-### Property-Based Testing
+### Property-based testing
 
-The library includes comprehensive property tests that verify cryptographic invariants and roundtrip properties:
+Property tests verify cryptographic invariants and roundtrip properties:
 
 ```bash
 # Run property tests (10,000 iterations per test by default)
@@ -277,16 +383,14 @@ cargo test --test proptests
 cargo test --test proptests -- --nocapture
 ```
 
-Property tests verify:
+Property tests cover:
 - Serialization/deserialization roundtrips across all formats
 - Signature verification invariants
 - Caveat addition preserves validity
 - Discharge binding correctness
 - Time-based expiration edge cases
 
-### Fuzz Testing
-
-For even more thorough testing, run the fuzz test suite:
+### Fuzz testing
 
 ```bash
 # Quick smoke test (5 seconds per target)
@@ -308,13 +412,14 @@ See [FUZZ.md](FUZZ.md) for detailed fuzzing documentation.
 - [x] Allocation-conscious API (in-place binding, zero-clone preparation)
 - [x] Property-based testing (proptest)
 - [x] Fuzz testing (cargo-fuzz)
-- [ ] Verification key encryption helpers for third-party caveats
-- [ ] Revocation support
-- [ ] Batch verification optimization
+- [x] Verification key encryption helpers for third-party caveats (ChaCha20-Poly1305)
+- [x] Revocation support (`RevocationChecker` trait + `RevocationList`)
+- [x] Batch verification (`verify_batch` / `verify_all`)
+- [x] Glob / prefix predicate matching (`~` and `!~` operators)
 
 ## Contributing
 
-Contributions welcome! Please:
+Pull requests welcome. Please:
 
 1. Fork the repository
 2. Create a feature branch

@@ -1,5 +1,6 @@
 use crate::caveat::Caveat;
 use crate::crypto::{SIGNATURE_SIZE, bind_caveat, hmac_sha3, signatures_equal};
+use crate::revocation::RevocationChecker;
 use crate::verifier::Verifier;
 use crate::{Result, StroopwafelError};
 use serde::{Deserialize, Serialize};
@@ -431,6 +432,108 @@ impl Stroopwafel {
             }
         }
 
+        Ok(())
+    }
+
+    /// Verifies this stroopwafel after first checking whether it has been revoked.
+    ///
+    /// Equivalent to checking [`RevocationChecker::is_revoked`] and then calling
+    /// [`verify`](Self::verify). Discharge identifiers are also checked against
+    /// the revocation list before signature verification runs.
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
+    /// use stroopwafel::revocation::RevocationList;
+    ///
+    /// let root_key = b"secret";
+    /// let token = Stroopwafel::new(root_key, b"session-xyz", None::<String>);
+    ///
+    /// let revoked = RevocationList::new(); // nothing revoked
+    /// assert!(token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked).is_ok());
+    /// ```
+    pub fn verify_checked(
+        &self,
+        root_key: &[u8],
+        verifier: &impl Verifier,
+        discharges: &[Stroopwafel],
+        revocation: &impl RevocationChecker,
+    ) -> Result<()> {
+        if revocation.is_revoked(&self.identifier) {
+            return Err(StroopwafelError::Revoked(
+                String::from_utf8_lossy(&self.identifier).to_string(),
+            ));
+        }
+        for discharge in discharges {
+            if revocation.is_revoked(&discharge.identifier) {
+                return Err(StroopwafelError::Revoked(
+                    String::from_utf8_lossy(&discharge.identifier).to_string(),
+                ));
+            }
+        }
+        self.verify(root_key, verifier, discharges)
+    }
+
+    /// Verifies multiple stroopwafels that share the same root key, collecting
+    /// every result rather than stopping at the first failure.
+    ///
+    /// Results are returned in the same order as `tokens`. This is useful for
+    /// audit logging or diagnostics where you want to see all failures at once.
+    /// For fail-fast semantics, use [`verify_all`](Self::verify_all).
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
+    ///
+    /// let root_key = b"secret";
+    /// let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+    /// let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+    ///
+    /// let results = Stroopwafel::verify_batch(
+    ///     [&t1, &t2],
+    ///     root_key,
+    ///     &AcceptAllVerifier,
+    ///     &[],
+    /// );
+    /// assert!(results.iter().all(|r| r.is_ok()));
+    /// ```
+    pub fn verify_batch<'a>(
+        tokens: impl IntoIterator<Item = &'a Stroopwafel>,
+        root_key: &[u8],
+        verifier: &impl Verifier,
+        discharges: &[Stroopwafel],
+    ) -> Vec<Result<()>> {
+        tokens
+            .into_iter()
+            .map(|token| token.verify(root_key, verifier, discharges))
+            .collect()
+    }
+
+    /// Verifies multiple stroopwafels that share the same root key, stopping at
+    /// the first failure.
+    ///
+    /// Returns `Ok(())` only when every token passes. For collecting all errors
+    /// instead of stopping early, use [`verify_batch`](Self::verify_batch).
+    ///
+    /// # Example
+    /// ```
+    /// use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
+    ///
+    /// let root_key = b"secret";
+    /// let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+    /// let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+    ///
+    /// Stroopwafel::verify_all([&t1, &t2], root_key, &AcceptAllVerifier, &[]).unwrap();
+    /// ```
+    pub fn verify_all<'a>(
+        tokens: impl IntoIterator<Item = &'a Stroopwafel>,
+        root_key: &[u8],
+        verifier: &impl Verifier,
+        discharges: &[Stroopwafel],
+    ) -> Result<()> {
+        for token in tokens {
+            token.verify(root_key, verifier, discharges)?;
+        }
         Ok(())
     }
 

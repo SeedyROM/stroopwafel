@@ -16,6 +16,10 @@ pub enum Operator {
     LessThanOrEqual,
     /// Greater than or equal (>=)
     GreaterThanOrEqual,
+    /// Glob match (~): supports `*` (any sequence) and `?` (any single char)
+    Matches,
+    /// Glob not-match (!~)
+    NotMatches,
 }
 
 impl Operator {
@@ -28,6 +32,8 @@ impl Operator {
             ">" => Some(Operator::GreaterThan),
             "<=" => Some(Operator::LessThanOrEqual),
             ">=" => Some(Operator::GreaterThanOrEqual),
+            "~" => Some(Operator::Matches),
+            "!~" => Some(Operator::NotMatches),
             _ => None,
         }
     }
@@ -41,6 +47,8 @@ impl Operator {
             Operator::GreaterThan => left > right,
             Operator::LessThanOrEqual => left <= right,
             Operator::GreaterThanOrEqual => left >= right,
+            Operator::Matches => glob_match(right, left),
+            Operator::NotMatches => !glob_match(right, left),
         }
     }
 
@@ -53,7 +61,40 @@ impl Operator {
             Operator::GreaterThan => left > right,
             Operator::LessThanOrEqual => left <= right,
             Operator::GreaterThanOrEqual => left >= right,
+            // Glob matching doesn't apply to numerics — fall through to string form
+            Operator::Matches | Operator::NotMatches => self.evaluate(
+                &left.to_string(),
+                &right.to_string(),
+            ),
         }
+    }
+}
+
+/// Match `value` against a glob `pattern`.
+///
+/// Supported wildcards:
+/// - `*` — matches zero or more characters
+/// - `?` — matches exactly one character
+///
+/// All other characters match literally.
+pub fn glob_match(pattern: &str, value: &str) -> bool {
+    glob_match_bytes(pattern.as_bytes(), value.as_bytes())
+}
+
+fn glob_match_bytes(pattern: &[u8], value: &[u8]) -> bool {
+    match (pattern, value) {
+        // Both exhausted — full match
+        ([], []) => true,
+        // `*` matches zero remaining chars
+        ([b'*', rest_p @ ..], _) => {
+            glob_match_bytes(rest_p, value)
+                || (!value.is_empty() && glob_match_bytes(pattern, &value[1..]))
+        }
+        // `?` matches any single char
+        ([b'?', rest_p @ ..], [_, rest_v @ ..]) => glob_match_bytes(rest_p, rest_v),
+        // Literal match
+        ([p, rest_p @ ..], [v, rest_v @ ..]) if p == v => glob_match_bytes(rest_p, rest_v),
+        _ => false,
     }
 }
 
@@ -77,8 +118,8 @@ impl Predicate {
     /// - "time < 2025-12-31T23:59:59Z"
     /// - "count >= 10"
     pub fn parse(s: &str) -> Result<Self> {
-        // Try to find an operator
-        let operators = ["<=", ">=", "!=", "=", "<", ">"];
+        // Try to find an operator (longer tokens first to avoid prefix ambiguity)
+        let operators = ["<=", ">=", "!=", "!~", "=", "<", ">", "~"];
 
         for op_str in &operators {
             if let Some(pos) = s.find(op_str) {
@@ -272,5 +313,75 @@ mod tests {
         // Make sure <= is matched before <
         let pred = Predicate::parse("x <= 5").unwrap();
         assert_eq!(pred.operator, Operator::LessThanOrEqual);
+    }
+
+    #[test]
+    fn test_parse_matches() {
+        let pred = Predicate::parse("resource ~ /api/*").unwrap();
+        assert_eq!(pred.key, "resource");
+        assert_eq!(pred.operator, Operator::Matches);
+        assert_eq!(pred.value, "/api/*");
+    }
+
+    #[test]
+    fn test_parse_not_matches() {
+        let pred = Predicate::parse("resource !~ /internal/*").unwrap();
+        assert_eq!(pred.key, "resource");
+        assert_eq!(pred.operator, Operator::NotMatches);
+        assert_eq!(pred.value, "/internal/*");
+    }
+
+    #[test]
+    fn test_glob_star_wildcard() {
+        assert!(glob_match("*", "anything"));
+        assert!(glob_match("*", ""));
+        assert!(glob_match("/api/*", "/api/users"));
+        assert!(glob_match("/api/*", "/api/users/123"));
+        assert!(!glob_match("/api/*", "/other/users"));
+    }
+
+    #[test]
+    fn test_glob_question_wildcard() {
+        assert!(glob_match("v?", "v1"));
+        assert!(glob_match("v?", "v2"));
+        assert!(!glob_match("v?", "v"));
+        assert!(!glob_match("v?", "v10"));
+    }
+
+    #[test]
+    fn test_glob_combined() {
+        assert!(glob_match("/api/v?/*", "/api/v1/users"));
+        assert!(glob_match("/api/v?/*", "/api/v2/orders/123"));
+        assert!(!glob_match("/api/v?/*", "/api/v10/users"));
+    }
+
+    #[test]
+    fn test_glob_literal() {
+        assert!(glob_match("/exact/path", "/exact/path"));
+        assert!(!glob_match("/exact/path", "/other/path"));
+    }
+
+    #[test]
+    fn test_evaluate_matches_predicate() {
+        let pred = Predicate::parse("resource ~ /docs/*").unwrap();
+        let mut context = HashMap::new();
+
+        context.insert("resource".to_string(), "/docs/readme".to_string());
+        assert!(pred.evaluate(&context));
+
+        context.insert("resource".to_string(), "/admin/secret".to_string());
+        assert!(!pred.evaluate(&context));
+    }
+
+    #[test]
+    fn test_evaluate_not_matches_predicate() {
+        let pred = Predicate::parse("resource !~ /internal/*").unwrap();
+        let mut context = HashMap::new();
+
+        context.insert("resource".to_string(), "/public/page".to_string());
+        assert!(pred.evaluate(&context));
+
+        context.insert("resource".to_string(), "/internal/secret".to_string());
+        assert!(!pred.evaluate(&context));
     }
 }
