@@ -86,29 +86,22 @@ token.add_first_party_caveat(b"resource = /documents/*");
 
 ### Third-party caveats
 
-Delegate verification to external services:
+Delegate verification to external services. The verification key must be encrypted before embedding it in the caveat — see [Third-party caveat encryption](#third-party-caveat-encryption) for the built-in helpers.
 
 ```rust ignore
-// IMPORTANT: In production, you must encrypt the verification key
-// before adding a third-party caveat. This library does not handle
-// encryption - you are responsible for encrypting the key with a
-// key shared between you and the third-party service.
+use stroopwafel::encryption::encrypt_verification_key;
 
-// Example (encryption not shown):
-// let verification_key = generate_random_key();
-// let encrypted_vk = encrypt_for_third_party(verification_key, third_party_key);
+let shared_secret = b"key-shared-between-issuer-and-auth-service";
+let vk = b"fresh-random-verification-key";
+let encrypted_vk = encrypt_verification_key(shared_secret, vk)?;
 
-token.add_third_party_caveat(
-    b"auth-service-check",
-    b"encrypted-verification-key",  // This MUST be encrypted!
-    "https://auth.example.com"
-);
+token.add_third_party_caveat(b"auth-service-check", encrypted_vk, "https://auth.example.com");
 
-// Third party decrypts the verification key and creates discharge macaroon
+// Third party decrypts the verification key and creates a discharge macaroon
 let discharge = Stroopwafel::create_discharge(
-    b"decrypted-verification-key",  // Third party decrypts this
+    &verification_key,
     b"auth-service-check",
-    Some("https://auth.example.com")
+    Some("https://auth.example.com"),
 );
 
 // Bind for use
