@@ -89,7 +89,7 @@ token.add_first_party_caveat(b"resource = /documents/*");
 Delegate verification to external services. The verification key must be encrypted before embedding it in the caveat — see [Third-party caveat encryption](#third-party-caveat-encryption) for the built-in helpers.
 
 ```rust ignore
-use stroopwafel::encryption::encrypt_verification_key;
+use stroopwafel::encrypt_verification_key;
 
 let shared_secret = b"key-shared-between-issuer-and-auth-service";
 let vk = b"fresh-random-verification-key";
@@ -192,7 +192,7 @@ The library provides helpers for encrypting verification keys before passing the
 party decrypts to recover the verification key:
 
 ```rust ignore
-use stroopwafel::encryption::{encrypt_verification_key, decrypt_verification_key};
+use stroopwafel::{encrypt_verification_key, decrypt_verification_key};
 
 // Issuer side: encrypt the verification key with the shared secret
 let shared_secret = b"key-shared-between-issuer-and-auth-service";
@@ -216,7 +216,7 @@ Check whether a token has been revoked before verifying it by using
 `verify_checked` with a [`RevocationChecker`]:
 
 ```rust ignore
-use stroopwafel::revocation::RevocationList;
+use stroopwafel::RevocationList;
 
 let mut revoked = RevocationList::new();
 revoked.revoke(b"session-to-invalidate");
