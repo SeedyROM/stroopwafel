@@ -73,7 +73,7 @@ fuzz_target!(|data: &[u8]| {
             let _ = predicate.evaluate(&context);
         }
 
-        // Also test operator parsing edge cases
+        // Also test operator parsing edge cases including glob operators
         let test_strings = [
             "key=value",
             "key = value",
@@ -89,10 +89,30 @@ fuzz_target!(|data: &[u8]| {
             "key <= value",
             "key>=value",
             "key >= value",
+            // Glob operators
+            "resource ~ /api/*",
+            "resource ~ *",
+            "resource ~ /api/v?/users",
+            "resource !~ /internal/*",
+            "path ~ /a/b/c/d/*",
+            "name ~ alice*",
+            "name !~ *admin*",
         ];
 
         for test in &test_strings {
             let _ = Predicate::parse(test);
+        }
+
+        // Exercise glob evaluation with fuzz-derived pattern and value
+        if let Ok(pred) = Predicate::parse(&format!("resource ~ {s}")) {
+            let mut ctx = HashMap::new();
+            ctx.insert("resource".to_string(), s.to_string());
+            let _ = pred.evaluate(&ctx);
+        }
+        if let Ok(pred) = Predicate::parse(&format!("resource !~ {s}")) {
+            let mut ctx = HashMap::new();
+            ctx.insert("resource".to_string(), s.to_string());
+            let _ = pred.evaluate(&ctx);
         }
     }
 });

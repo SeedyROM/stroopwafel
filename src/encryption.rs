@@ -36,7 +36,7 @@ fn nonce_from_slice(bytes: &[u8]) -> Result<Nonce> {
 ///
 /// # Example
 /// ```
-/// use stroopwafel::encryption::{encrypt_verification_key, decrypt_verification_key};
+/// use stroopwafel::{encrypt_verification_key, decrypt_verification_key};
 ///
 /// let shared_secret = b"secret-known-by-issuer-and-third-party";
 /// let vk = b"random-verification-key";

@@ -12,6 +12,7 @@ pub mod stroopwafel;
 pub mod verifier;
 
 pub use caveat::Caveat;
+pub use encryption::{decrypt_verification_key, encrypt_verification_key};
 pub use error::StroopwafelError;
 pub use revocation::{NoRevocation, RevocationChecker, RevocationList};
 pub use stroopwafel::Stroopwafel;

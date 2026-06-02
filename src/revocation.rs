@@ -16,7 +16,7 @@ pub trait RevocationChecker {
 ///
 /// # Example
 /// ```
-/// use stroopwafel::revocation::{RevocationChecker, RevocationList};
+/// use stroopwafel::{RevocationChecker, RevocationList};
 /// use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
 ///
 /// let root_key = b"secret";

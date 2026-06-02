@@ -443,8 +443,7 @@ impl Stroopwafel {
     ///
     /// # Example
     /// ```
-    /// use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
-    /// use stroopwafel::revocation::RevocationList;
+    /// use stroopwafel::{Stroopwafel, RevocationList, verifier::AcceptAllVerifier};
     ///
     /// let root_key = b"secret";
     /// let token = Stroopwafel::new(root_key, b"session-xyz", None::<String>);
@@ -1087,5 +1086,138 @@ mod tests {
                 .verify(root_key, &verifier, &[bound1, bound2])
                 .is_ok()
         );
+    }
+
+    // --- verify_checked ---
+
+    #[test]
+    fn test_verify_checked_passes_when_not_revoked() {
+        use crate::revocation::RevocationList;
+        let root_key = b"secret";
+        let token = Stroopwafel::new(root_key, b"session-abc", None::<String>);
+        let revoked = RevocationList::new();
+        assert!(token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked).is_ok());
+    }
+
+    #[test]
+    fn test_verify_checked_rejects_revoked_primary() {
+        use crate::revocation::RevocationList;
+        let root_key = b"secret";
+        let token = Stroopwafel::new(root_key, b"session-abc", None::<String>);
+        let mut revoked = RevocationList::new();
+        revoked.revoke(b"session-abc");
+        let result = token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StroopwafelError::Revoked(_)));
+    }
+
+    #[test]
+    fn test_verify_checked_rejects_revoked_discharge() {
+        use crate::revocation::RevocationList;
+        let root_key = b"secret";
+        let vk = b"vk";
+        let mut primary = Stroopwafel::new(root_key, b"primary", None::<String>);
+        primary.add_third_party_caveat(b"auth", vk, "https://auth.example.com");
+        let discharge = Stroopwafel::create_discharge(vk, b"auth", None::<String>);
+        let bound = primary.bind_discharge(&discharge);
+
+        let mut revoked = RevocationList::new();
+        revoked.revoke(b"auth");
+
+        let result = primary.verify_checked(root_key, &AcceptAllVerifier, &[bound], &revoked);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StroopwafelError::Revoked(_)));
+    }
+
+    #[test]
+    fn test_verify_checked_still_fails_bad_signature() {
+        use crate::revocation::RevocationList;
+        let root_key = b"secret";
+        let mut token = Stroopwafel::new(root_key, b"session", None::<String>);
+        token.signature[0] ^= 0xff;
+        let revoked = RevocationList::new();
+        let result = token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), StroopwafelError::InvalidSignature));
+    }
+
+    // --- verify_batch ---
+
+    #[test]
+    fn test_verify_batch_all_valid() {
+        let root_key = b"secret";
+        let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+        let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+        let t3 = Stroopwafel::new(root_key, b"id-3", None::<String>);
+        let results = Stroopwafel::verify_batch([&t1, &t2, &t3], root_key, &AcceptAllVerifier, &[]);
+        assert_eq!(results.len(), 3);
+        assert!(results.iter().all(|r| r.is_ok()));
+    }
+
+    #[test]
+    fn test_verify_batch_collects_all_failures() {
+        let root_key = b"secret";
+        let wrong_key = b"wrong";
+        let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+        let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+        // All will fail because we verify with the wrong key
+        let results = Stroopwafel::verify_batch([&t1, &t2], wrong_key, &AcceptAllVerifier, &[]);
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.is_err()));
+    }
+
+    #[test]
+    fn test_verify_batch_mixed_results() {
+        let root_key = b"secret";
+        let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+        let mut t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+        t2.signature[0] ^= 0xff; // tamper
+        let results = Stroopwafel::verify_batch([&t1, &t2], root_key, &AcceptAllVerifier, &[]);
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+    }
+
+    #[test]
+    fn test_verify_batch_empty() {
+        let root_key = b"secret";
+        let results = Stroopwafel::verify_batch(
+            std::iter::empty::<&Stroopwafel>(),
+            root_key,
+            &AcceptAllVerifier,
+            &[],
+        );
+        assert!(results.is_empty());
+    }
+
+    // --- verify_all ---
+
+    #[test]
+    fn test_verify_all_succeeds_when_all_valid() {
+        let root_key = b"secret";
+        let t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+        let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+        assert!(Stroopwafel::verify_all([&t1, &t2], root_key, &AcceptAllVerifier, &[]).is_ok());
+    }
+
+    #[test]
+    fn test_verify_all_fails_on_first_invalid() {
+        let root_key = b"secret";
+        let mut t1 = Stroopwafel::new(root_key, b"id-1", None::<String>);
+        t1.signature[0] ^= 0xff; // tamper
+        let t2 = Stroopwafel::new(root_key, b"id-2", None::<String>);
+        // t1 is first and invalid; should fail without checking t2
+        let result = Stroopwafel::verify_all([&t1, &t2], root_key, &AcceptAllVerifier, &[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_all_empty() {
+        let root_key = b"secret";
+        assert!(Stroopwafel::verify_all(
+            std::iter::empty::<&Stroopwafel>(),
+            root_key,
+            &AcceptAllVerifier,
+            &[],
+        ).is_ok());
     }
 }

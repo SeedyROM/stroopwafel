@@ -1,5 +1,6 @@
 use proptest::prelude::*;
 use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
+use stroopwafel::{decrypt_verification_key, encrypt_verification_key, RevocationList};
 
 // Configuration for crypto library: run many more cases than default (100)
 // For security-critical code, we want extensive coverage
@@ -277,6 +278,161 @@ fn prop_tampered_signature_fails() {
 
         let verifier = AcceptAllVerifier;
         prop_assert!(stroopwafel.verify(&root_key, &verifier, &[]).is_err());
+    });
+}
+
+/// Property: encrypt then decrypt always recovers the original plaintext
+#[test]
+fn prop_encryption_roundtrip() {
+    let config = proptest_config();
+    proptest!(config, |(
+        shared_key in prop::collection::vec(any::<u8>(), 1..128),
+        plaintext in prop::collection::vec(any::<u8>(), 0..128)
+    )| {
+        let encrypted = encrypt_verification_key(&shared_key, &plaintext).unwrap();
+        let decrypted = decrypt_verification_key(&shared_key, &encrypted).unwrap();
+        prop_assert_eq!(decrypted, plaintext);
+    });
+}
+
+/// Property: same plaintext encrypted twice produces different ciphertexts (random nonce)
+#[test]
+fn prop_encryption_nonces_are_unique() {
+    let config = proptest_config();
+    proptest!(config, |(
+        shared_key in prop::collection::vec(any::<u8>(), 1..128),
+        plaintext in prop::collection::vec(any::<u8>(), 1..64)
+    )| {
+        let enc1 = encrypt_verification_key(&shared_key, &plaintext).unwrap();
+        let enc2 = encrypt_verification_key(&shared_key, &plaintext).unwrap();
+        prop_assert_ne!(enc1, enc2);
+    });
+}
+
+/// Property: decryption with a wrong key always fails
+#[test]
+fn prop_encryption_wrong_key_fails() {
+    let config = proptest_config();
+    proptest!(config, |(
+        key in prop::collection::vec(any::<u8>(), 1..128),
+        wrong_key in prop::collection::vec(any::<u8>(), 1..128),
+        plaintext in prop::collection::vec(any::<u8>(), 1..64)
+    )| {
+        prop_assume!(key != wrong_key);
+        let encrypted = encrypt_verification_key(&key, &plaintext).unwrap();
+        prop_assert!(decrypt_verification_key(&wrong_key, &encrypted).is_err());
+    });
+}
+
+/// Property: a revoked token is always rejected by verify_checked
+#[test]
+fn prop_revocation_blocks_revoked_tokens() {
+    let config = proptest_config();
+    proptest!(config, |(
+        root_key in prop::collection::vec(any::<u8>(), 1..128),
+        identifier in prop::collection::vec(any::<u8>(), 1..128)
+    )| {
+        let token = Stroopwafel::new(&root_key, identifier.clone(), None::<String>);
+        let mut revoked = RevocationList::new();
+        revoked.revoke(identifier);
+        let result = token.verify_checked(&root_key, &AcceptAllVerifier, &[], &revoked);
+        prop_assert!(result.is_err());
+    });
+}
+
+/// Property: verify_checked with an empty revocation list behaves identically to verify
+#[test]
+fn prop_verify_checked_matches_verify_when_no_revocations() {
+    let config = proptest_config();
+    proptest!(config, |(
+        root_key in prop::collection::vec(any::<u8>(), 1..128),
+        identifier in prop::collection::vec(any::<u8>(), 1..128)
+    )| {
+        let token = Stroopwafel::new(&root_key, identifier, None::<String>);
+        let revoked = RevocationList::new();
+        let plain = token.verify(&root_key, &AcceptAllVerifier, &[]);
+        let checked = token.verify_checked(&root_key, &AcceptAllVerifier, &[], &revoked);
+        prop_assert_eq!(plain.is_ok(), checked.is_ok());
+    });
+}
+
+/// Property: verify_batch results match individual verify calls
+#[test]
+fn prop_verify_batch_consistent_with_verify() {
+    let config = proptest_config();
+    proptest!(config, |(
+        root_key in prop::collection::vec(any::<u8>(), 1..64),
+        ids in prop::collection::vec(
+            prop::collection::vec(any::<u8>(), 1..32),
+            1..8
+        )
+    )| {
+        let tokens: Vec<Stroopwafel> = ids.iter()
+            .map(|id| Stroopwafel::new(&root_key, id.clone(), None::<String>))
+            .collect();
+
+        let batch = Stroopwafel::verify_batch(
+            tokens.iter(),
+            &root_key,
+            &AcceptAllVerifier,
+            &[],
+        );
+
+        for (token, result) in tokens.iter().zip(batch.iter()) {
+            let individual = token.verify(&root_key, &AcceptAllVerifier, &[]);
+            prop_assert_eq!(individual.is_ok(), result.is_ok());
+        }
+    });
+}
+
+/// Property: verify_all fails iff at least one token has a bad signature
+#[test]
+fn prop_verify_all_fails_iff_any_tampered() {
+    let config = proptest_config();
+    proptest!(config, |(
+        root_key in prop::collection::vec(any::<u8>(), 1..64),
+        ids in prop::collection::vec(
+            prop::collection::vec(any::<u8>(), 1..32),
+            2..6
+        ),
+        tamper_index in prop::sample::Index::arbitrary()
+    )| {
+        let mut tokens: Vec<Stroopwafel> = ids.iter()
+            .map(|id| Stroopwafel::new(&root_key, id.clone(), None::<String>))
+            .collect();
+
+        let idx = tamper_index.index(tokens.len());
+        tokens[idx].signature[0] ^= 0xff;
+
+        let result = Stroopwafel::verify_all(
+            tokens.iter(),
+            &root_key,
+            &AcceptAllVerifier,
+            &[],
+        );
+        prop_assert!(result.is_err());
+    });
+}
+
+/// Property: glob `*` as the entire pattern matches any string
+#[test]
+fn prop_glob_star_matches_anything() {
+    use stroopwafel::predicate::glob_match;
+    let config = proptest_config();
+    proptest!(config, |(value in any::<String>())| {
+        prop_assert!(glob_match("*", &value));
+    });
+}
+
+/// Property: a literal pattern only matches itself
+#[test]
+fn prop_glob_literal_exact_match() {
+    use stroopwafel::predicate::glob_match;
+    let config = proptest_config();
+    proptest!(config, |(
+        pattern in "[a-z0-9/]{1,20}"
+    )| {
+        prop_assert!(glob_match(&pattern, &pattern));
     });
 }
 

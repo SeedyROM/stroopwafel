@@ -2,6 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use stroopwafel::{Stroopwafel, verifier::{ContextVerifier, FnVerifier}};
+use stroopwafel::RevocationList;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 4 {
@@ -118,4 +119,23 @@ fuzz_target!(|data: &[u8]| {
     // Check caveat count
     let _ = many_caveats_token.caveat_count();
     let _ = many_caveats_token.is_unrestricted();
+
+    // Exercise verify_checked with revocation — both hit and miss paths
+    let accept_all = FnVerifier::new(|_| Ok(()));
+    let mut revoked = RevocationList::new();
+
+    // Miss: identifier not in list
+    let _ = token.verify_checked(root_key, &accept_all, &[], &revoked);
+
+    // Hit: revoke the token's own identifier
+    revoked.revoke(identifier.to_vec());
+    let _ = token.verify_checked(root_key, &accept_all, &[], &revoked);
+
+    // Exercise verify_batch and verify_all with fuzz-derived tokens
+    if data.len() >= 32 {
+        let t1 = Stroopwafel::new(root_key, &data[..16], None::<String>);
+        let t2 = Stroopwafel::new(root_key, &data[16..32], None::<String>);
+        let _ = Stroopwafel::verify_batch([&t1, &t2], root_key, &accept_all, &[]);
+        let _ = Stroopwafel::verify_all([&t1, &t2], root_key, &accept_all, &[]);
+    }
 });

@@ -434,7 +434,7 @@ Dual licensed under your choice of:
 - Apache License, Version 2.0 (<http://www.apache.org/licenses/LICENSE-2.0>)
 - MIT license (<http://opensource.org/licenses/MIT>)
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
 
 ## References
 

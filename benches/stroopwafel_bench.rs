@@ -277,6 +277,139 @@ fn bench_context_verifier(c: &mut Criterion) {
     });
 }
 
+fn bench_encryption(c: &mut Criterion) {
+    use stroopwafel::{decrypt_verification_key, encrypt_verification_key};
+
+    let shared_key = b"bench-shared-secret-key";
+    let vk = b"random-verification-key-32bytes!";
+
+    let encrypted = encrypt_verification_key(shared_key, vk).unwrap();
+
+    c.bench_function("encrypt_verification_key", |b| {
+        b.iter(|| black_box(encrypt_verification_key(black_box(shared_key), black_box(vk)).unwrap()))
+    });
+
+    c.bench_function("decrypt_verification_key", |b| {
+        b.iter(|| {
+            black_box(decrypt_verification_key(black_box(shared_key), black_box(&encrypted)).unwrap())
+        })
+    });
+}
+
+fn bench_revocation(c: &mut Criterion) {
+    use stroopwafel::RevocationList;
+
+    let root_key = b"super_secret_key_for_benchmarking";
+    let token = Stroopwafel::new(root_key, b"session-bench-id", Some("https://example.com"));
+    let verifier = AcceptAllVerifier;
+
+    let empty_revoked = RevocationList::new();
+
+    let mut hit_revoked = RevocationList::new();
+    hit_revoked.revoke(b"session-bench-id");
+
+    c.bench_function("verify_checked_no_revocation_hit", |b| {
+        b.iter(|| {
+            black_box(
+                token
+                    .verify_checked(black_box(root_key), black_box(&verifier), &[], &empty_revoked)
+                    .unwrap(),
+            )
+        })
+    });
+
+    c.bench_function("verify_checked_revocation_hit", |b| {
+        b.iter(|| {
+            black_box(
+                token
+                    .verify_checked(black_box(root_key), black_box(&verifier), &[], &hit_revoked)
+                    .unwrap_err(),
+            )
+        })
+    });
+}
+
+fn bench_batch_verification(c: &mut Criterion) {
+    let root_key = b"super_secret_key_for_benchmarking";
+    let mut group = c.benchmark_group("batch_verification");
+    let verifier = AcceptAllVerifier;
+
+    for count in [1usize, 5, 10, 50].iter() {
+        let tokens: Vec<Stroopwafel> = (0..*count)
+            .map(|i| Stroopwafel::new(root_key, format!("id-{i}").as_bytes(), None::<String>))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("verify_batch", count),
+            count,
+            |b, _| {
+                b.iter(|| {
+                    black_box(Stroopwafel::verify_batch(
+                        tokens.iter(),
+                        black_box(root_key),
+                        black_box(&verifier),
+                        &[],
+                    ))
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("verify_all", count),
+            count,
+            |b, _| {
+                b.iter(|| {
+                    black_box(
+                        Stroopwafel::verify_all(
+                            tokens.iter(),
+                            black_box(root_key),
+                            black_box(&verifier),
+                            &[],
+                        )
+                        .unwrap(),
+                    )
+                })
+            },
+        );
+    }
+    group.finish();
+}
+
+fn bench_glob_predicates(c: &mut Criterion) {
+    use stroopwafel::predicate::Predicate;
+
+    let glob_predicates = [
+        "resource ~ /api/*",
+        "path ~ /api/v?/*",
+        "resource !~ /internal/*",
+    ];
+
+    c.bench_function("glob_predicate_parse", |b| {
+        b.iter(|| {
+            for pred_str in &glob_predicates {
+                black_box(Predicate::parse(black_box(pred_str)).unwrap());
+            }
+        })
+    });
+
+    let predicates: Vec<Predicate> = glob_predicates
+        .iter()
+        .map(|s| Predicate::parse(s).unwrap())
+        .collect();
+
+    let mut context = HashMap::new();
+    context.insert("resource".to_string(), "/api/v1/users".to_string());
+    context.insert("path".to_string(), "/api/v2/orders".to_string());
+
+    c.bench_function("glob_predicate_evaluate", |b| {
+        b.iter(|| {
+            for pred in &predicates {
+                black_box(pred.evaluate(black_box(&context)));
+            }
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_stroopwafel_new,
@@ -291,6 +424,10 @@ criterion_group!(
     bench_predicate_parsing,
     bench_predicate_evaluation,
     bench_context_verifier,
+    bench_encryption,
+    bench_revocation,
+    bench_batch_verification,
+    bench_glob_predicates,
 );
 
 criterion_main!(benches);
