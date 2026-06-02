@@ -419,6 +419,41 @@ See [FUZZ.md](FUZZ.md) for detailed fuzzing documentation.
 
 ## Contributing
 
+### Development setup
+
+This project uses [pre-commit](https://pre-commit.com) to enforce formatting, linting, and tests before commits and pushes.
+
+Install `pre-commit` (once, globally):
+
+```bash
+pip install pre-commit
+# or via Homebrew
+brew install pre-commit
+```
+
+Then install the hooks for this repo:
+
+```bash
+pre-commit install            # runs on every commit (fmt + clippy)
+pre-commit install --hook-type pre-push  # runs cargo test on push
+```
+
+Hooks that run on **commit**:
+- `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `check-merge-conflict`, `check-added-large-files`
+- `cargo fmt` — auto-formats changed `.rs` / `.toml` files
+- `cargo clippy --fix` — applies lint fixes; fails the commit if warnings remain
+
+Hook that runs on **push**:
+- `cargo test --all-features --all-targets`
+
+To run all hooks manually without committing:
+
+```bash
+pre-commit run --all-files
+```
+
+### Submitting changes
+
 Pull requests welcome. Please:
 
 1. Fork the repository
