@@ -1,6 +1,6 @@
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 
 use crate::crypto::hmac_sha3;
@@ -85,11 +85,9 @@ pub fn decrypt_verification_key(shared_key: &[u8], encrypted: &[u8]) -> Result<V
     let (nonce_bytes, ciphertext) = encrypted.split_at(NONCE_SIZE);
     let nonce = nonce_from_slice(nonce_bytes)?;
 
-    cipher
-        .decrypt(&nonce, ciphertext)
-        .map_err(|_| StroopwafelError::CryptoError(
-            "Decryption failed — wrong key or tampered data".into(),
-        ))
+    cipher.decrypt(&nonce, ciphertext).map_err(|_| {
+        StroopwafelError::CryptoError("Decryption failed — wrong key or tampered data".into())
+    })
 }
 
 #[cfg(test)]
@@ -129,7 +127,10 @@ mod tests {
         let result = decrypt_verification_key(wrong_key, &encrypted);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), StroopwafelError::CryptoError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            StroopwafelError::CryptoError(_)
+        ));
     }
 
     #[test]

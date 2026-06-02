@@ -1,6 +1,6 @@
 use proptest::prelude::*;
+use stroopwafel::{RevocationList, decrypt_verification_key, encrypt_verification_key};
 use stroopwafel::{Stroopwafel, verifier::AcceptAllVerifier};
-use stroopwafel::{decrypt_verification_key, encrypt_verification_key, RevocationList};
 
 // Configuration for crypto library: run many more cases than default (100)
 // For security-critical code, we want extensive coverage

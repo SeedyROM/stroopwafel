@@ -1096,7 +1096,11 @@ mod tests {
         let root_key = b"secret";
         let token = Stroopwafel::new(root_key, b"session-abc", None::<String>);
         let revoked = RevocationList::new();
-        assert!(token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked).is_ok());
+        assert!(
+            token
+                .verify_checked(root_key, &AcceptAllVerifier, &[], &revoked)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -1138,7 +1142,10 @@ mod tests {
         let revoked = RevocationList::new();
         let result = token.verify_checked(root_key, &AcceptAllVerifier, &[], &revoked);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), StroopwafelError::InvalidSignature));
+        assert!(matches!(
+            result.unwrap_err(),
+            StroopwafelError::InvalidSignature
+        ));
     }
 
     // --- verify_batch ---
@@ -1213,11 +1220,14 @@ mod tests {
     #[test]
     fn test_verify_all_empty() {
         let root_key = b"secret";
-        assert!(Stroopwafel::verify_all(
-            std::iter::empty::<&Stroopwafel>(),
-            root_key,
-            &AcceptAllVerifier,
-            &[],
-        ).is_ok());
+        assert!(
+            Stroopwafel::verify_all(
+                std::iter::empty::<&Stroopwafel>(),
+                root_key,
+                &AcceptAllVerifier,
+                &[],
+            )
+            .is_ok()
+        );
     }
 }

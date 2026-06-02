@@ -286,12 +286,16 @@ fn bench_encryption(c: &mut Criterion) {
     let encrypted = encrypt_verification_key(shared_key, vk).unwrap();
 
     c.bench_function("encrypt_verification_key", |b| {
-        b.iter(|| black_box(encrypt_verification_key(black_box(shared_key), black_box(vk)).unwrap()))
+        b.iter(|| {
+            black_box(encrypt_verification_key(black_box(shared_key), black_box(vk)).unwrap())
+        })
     });
 
     c.bench_function("decrypt_verification_key", |b| {
         b.iter(|| {
-            black_box(decrypt_verification_key(black_box(shared_key), black_box(&encrypted)).unwrap())
+            black_box(
+                decrypt_verification_key(black_box(shared_key), black_box(&encrypted)).unwrap(),
+            )
         })
     });
 }
@@ -310,11 +314,15 @@ fn bench_revocation(c: &mut Criterion) {
 
     c.bench_function("verify_checked_no_revocation_hit", |b| {
         b.iter(|| {
-            black_box(
-                token
-                    .verify_checked(black_box(root_key), black_box(&verifier), &[], &empty_revoked)
-                    .unwrap(),
-            )
+            token
+                .verify_checked(
+                    black_box(root_key),
+                    black_box(&verifier),
+                    &[],
+                    &empty_revoked,
+                )
+                .unwrap();
+            black_box(())
         })
     });
 
@@ -339,38 +347,29 @@ fn bench_batch_verification(c: &mut Criterion) {
             .map(|i| Stroopwafel::new(root_key, format!("id-{i}").as_bytes(), None::<String>))
             .collect();
 
-        group.bench_with_input(
-            BenchmarkId::new("verify_batch", count),
-            count,
-            |b, _| {
-                b.iter(|| {
-                    black_box(Stroopwafel::verify_batch(
-                        tokens.iter(),
-                        black_box(root_key),
-                        black_box(&verifier),
-                        &[],
-                    ))
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("verify_batch", count), count, |b, _| {
+            b.iter(|| {
+                black_box(Stroopwafel::verify_batch(
+                    tokens.iter(),
+                    black_box(root_key),
+                    black_box(&verifier),
+                    &[],
+                ))
+            })
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("verify_all", count),
-            count,
-            |b, _| {
-                b.iter(|| {
-                    black_box(
-                        Stroopwafel::verify_all(
-                            tokens.iter(),
-                            black_box(root_key),
-                            black_box(&verifier),
-                            &[],
-                        )
-                        .unwrap(),
-                    )
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("verify_all", count), count, |b, _| {
+            b.iter(|| {
+                Stroopwafel::verify_all(
+                    tokens.iter(),
+                    black_box(root_key),
+                    black_box(&verifier),
+                    &[],
+                )
+                .unwrap();
+                black_box(())
+            })
+        });
     }
     group.finish();
 }

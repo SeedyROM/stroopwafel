@@ -1,5 +1,5 @@
 use stroopwafel::{
-    decrypt_verification_key, encrypt_verification_key, RevocationList, Stroopwafel,
+    RevocationList, Stroopwafel, decrypt_verification_key, encrypt_verification_key,
     verifier::AcceptAllVerifier,
 };
 
@@ -18,16 +18,23 @@ fn main() {
 
     let mut primary = Stroopwafel::new(root_key, b"session-abc", Some("https://api.example.com"));
     primary.add_first_party_caveat(b"resource ~ /documents/*");
-    primary.add_third_party_caveat(b"auth-check", encrypted_vk.as_slice(), "https://auth.example.com");
+    primary.add_third_party_caveat(
+        b"auth-check",
+        encrypted_vk.as_slice(),
+        "https://auth.example.com",
+    );
 
     // Auth service decrypts the key and issues a discharge
     let decrypted_vk = decrypt_verification_key(shared_secret, &encrypted_vk).unwrap();
-    let discharge =
-        Stroopwafel::create_discharge(&decrypted_vk, b"auth-check", Some("https://auth.example.com"));
+    let discharge = Stroopwafel::create_discharge(
+        &decrypted_vk,
+        b"auth-check",
+        Some("https://auth.example.com"),
+    );
     let bound = primary.bind_discharge(&discharge);
 
-    let verifier = stroopwafel::verifier::ContextVerifier::empty()
-        .with("resource", "/documents/readme.md");
+    let verifier =
+        stroopwafel::verifier::ContextVerifier::empty().with("resource", "/documents/readme.md");
 
     match primary.verify(root_key, &verifier, std::slice::from_ref(&bound)) {
         Ok(_) => println!("   Verification passed with encrypted third-party caveat"),
@@ -70,7 +77,13 @@ fn main() {
     println!("\n3. Batch verification");
 
     let tokens: Vec<Stroopwafel> = (1..=5)
-        .map(|i| Stroopwafel::new(root_key, format!("batch-session-{i}").as_bytes(), None::<String>))
+        .map(|i| {
+            Stroopwafel::new(
+                root_key,
+                format!("batch-session-{i}").as_bytes(),
+                None::<String>,
+            )
+        })
         .collect();
 
     let results = Stroopwafel::verify_batch(tokens.iter(), root_key, &AcceptAllVerifier, &[]);

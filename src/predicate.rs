@@ -62,10 +62,9 @@ impl Operator {
             Operator::LessThanOrEqual => left <= right,
             Operator::GreaterThanOrEqual => left >= right,
             // Glob matching doesn't apply to numerics — fall through to string form
-            Operator::Matches | Operator::NotMatches => self.evaluate(
-                &left.to_string(),
-                &right.to_string(),
-            ),
+            Operator::Matches | Operator::NotMatches => {
+                self.evaluate(&left.to_string(), &right.to_string())
+            }
         }
     }
 }

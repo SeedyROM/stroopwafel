@@ -3,7 +3,8 @@
 [![GitHub](https://img.shields.io/badge/github-stroopwafel-8da0cb?logo=github)](https://github.com/SeedyROM/stroopwafel)
 [![crates.io version](https://img.shields.io/crates/v/stroopwafel.svg)](https://crates.io/crates/stroopwafel)
 [![docs.rs docs](https://docs.rs/stroopwafel/badge.svg)](https://docs.rs/stroopwafel)
-[![crates.io version](https://img.shields.io/crates/l/stroopwafel.svg)](https://github.com/SeedyROM/stroopwafel/blob/main/LICENSE)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
+[![Apache 2.0 license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
 
 A Rust implementation of **Macaroons**: authorization tokens with contextual caveats for decentralized authorization.
 
